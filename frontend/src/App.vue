@@ -1,5 +1,5 @@
 <template>
-  <div class="h-screen w-screen overflow-hidden font-sans">
+  <div class="h-[100dvh] w-screen overflow-hidden font-sans">
     <RouterView />
   </div>
 </template>

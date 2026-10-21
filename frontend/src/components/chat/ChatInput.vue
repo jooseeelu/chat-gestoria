@@ -1,5 +1,5 @@
 <template>
-  <div class="relative p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#0f172a] transition-colors duration-200">
+  <div class="relative p-2.5 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#0f172a] transition-colors duration-200 flex-shrink-0">
     
     <!-- Barra de progreso de subida -->
     <div 
@@ -83,7 +83,7 @@
         v-model="text"
         rows="1"
         :placeholder="`Escribe a ${authStore.peerUser?.name}... (Markdown, código y pegar capturas con Ctrl+V)`"
-        class="flex-1 bg-transparent resize-none max-h-36 py-2 px-1 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
+        class="flex-1 bg-transparent resize-none max-h-36 py-2 px-1 text-base sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
         @keydown="handleKeyDown"
         @paste="handlePaste"
         @input="adjustHeight"
