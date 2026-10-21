@@ -21,7 +21,7 @@
           Gestoría <span class="text-amber-600 font-extrabold">eMadrid</span>
         </h1>
         <p class="text-xs text-slate-500 mt-1 font-medium">
-          Portal de Comunicación Interna & Documentación
+          Chat Interno
         </p>
       </div>
 
@@ -118,13 +118,13 @@ const router = useRouter();
 const authStore = useAuthStore();
 
 const email = ref('joseluis@gestoriaemadrid.com');
-const password = ref(authStore.userPasswords?.['user_joseluis_01'] || 'eMadrid2025!');
+const password = ref('');
 const errorMessage = ref('');
 const isLoading = ref(false);
 
 function selectUser(user) {
   email.value = user.email;
-  password.value = authStore.userPasswords?.[user.id] || 'eMadrid2025!';
+  password.value = '';
   errorMessage.value = '';
 }
 

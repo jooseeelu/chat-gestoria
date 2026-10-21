@@ -17,7 +17,7 @@
               GESTORÍA
             </span>
           </div>
-          <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Portal Interno & Archivos</p>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Chat Interno</p>
         </div>
       </div>
 
@@ -86,11 +86,17 @@
       <div>
         <div class="flex items-center justify-between px-2 mb-2">
           <span class="text-xs sm:text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-            Compañero en Línea
+            Equipo IT
           </span>
-          <div class="flex items-center gap-1.5 text-xs sm:text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Online</span>
+          <div 
+            class="flex items-center gap-1.5 text-xs sm:text-[10px] font-medium"
+            :class="isPeerOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'"
+          >
+            <span 
+              class="w-2 h-2 rounded-full" 
+              :class="isPeerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400 dark:bg-slate-600'"
+            ></span>
+            <span>{{ isPeerOnline ? 'Online' : 'Desconectado' }}</span>
           </div>
         </div>
 
@@ -103,7 +109,10 @@
                 :alt="authStore.peerUser?.name" 
                 class="w-10 h-10 sm:w-9 sm:h-9 rounded-xl object-cover ring-1 ring-slate-300 dark:ring-slate-700"
               />
-              <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"></span>
+              <span 
+                class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-slate-900"
+                :class="isPeerOnline ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-600'"
+              ></span>
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-1.5">
@@ -121,7 +130,11 @@
           </div>
 
           <div class="flex items-center gap-1">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500" title="Activo ahora"></span>
+            <span 
+              class="w-2.5 h-2.5 rounded-full" 
+              :class="isPeerOnline ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"
+              :title="isPeerOnline ? 'Activo ahora' : 'Desconectado'"
+            ></span>
           </div>
         </div>
       </div>
@@ -178,6 +191,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { 
   Building2,
@@ -196,6 +210,10 @@ const emit = defineEmits(['close-sidebar']);
 const router = useRouter();
 const chatStore = useChatStore();
 const authStore = useAuthStore();
+
+const isPeerOnline = computed(() => {
+  return authStore.peerUser?.status === 'online';
+});
 
 function getChannelIcon(iconName) {
   switch (iconName) {

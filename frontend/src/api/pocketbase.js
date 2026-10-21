@@ -34,7 +34,7 @@ export const MOCK_USERS = [
     role: 'member',
     department: 'IT & Sistemas',
     position: 'Desarrollador',
-    status: 'online',
+    status: 'offline',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80',
     color: '#d4af37'
   }
