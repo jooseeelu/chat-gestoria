@@ -150,8 +150,7 @@ const allItems = computed(() => {
     category: 'Cuenta',
     icon: LogOut,
     action: () => {
-      authStore.logout();
-      router.push('/login');
+      authStore.promptLogout();
     }
   });
 

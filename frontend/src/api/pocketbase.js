@@ -64,9 +64,9 @@ export const MOCK_CHANNELS = [
     id: 'space_it',
     name: 'Departamento IT & Sistemas',
     department: 'IT & Sistemas',
-    description: 'Espacio de desarrollo e integraciones con Jose Luis y Johan',
+    description: 'Espacio de coordinación técnica, desarrollo e infraestructura',
     icon: 'Terminal',
-    unread_count: 1
+    unread_count: 0
   },
   {
     id: 'space_urgencias',
@@ -84,53 +84,35 @@ export const INITIAL_MESSAGES = {
       id: 'msg_it_1',
       channel: 'space_it',
       sender: MOCK_USERS[0], // Jose Luis
-      content: 'Johan, he preparado este canal exclusivo de IT & Sistemas para que coordinemos los despliegues en Dokploy, webhooks de n8n y desarrollo interno de Gestoría eMadrid.',
+      content: 'Canal de IT & Sistemas activo. Espacio para la coordinación técnica, desarrollo de proyectos y soporte del equipo.',
       type: 'text',
-      created: new Date(Date.now() - 3600000 * 2).toISOString(),
-      attachments: []
-    },
-    {
-      id: 'msg_it_2',
-      channel: 'space_it',
-      sender: MOCK_USERS[1], // Johan
-      content: '¡Perfecto Jose Luis! Mucho más organizado tener el canal General para toda la gestoría, el de Asesores y este nuestro para el código y servidores.',
-      type: 'file',
-      created: new Date(Date.now() - 3600000).toISOString(),
-      attachments: [
-        {
-          id: 'att_it_1',
-          filename: 'Esquema_Arquitectura_eMadrid_IT.pdf',
-          file_type: 'pdf',
-          size: 780000,
-          url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-        }
-      ]
-    }
-  ],
-  'space_general': [
-    {
-      id: 'msg_gen_1',
-      channel: 'space_general',
-      sender: MOCK_USERS[0],
-      content: 'Canal general de Gestoría eMadrid. Aquí se anunciarán comunicaciones de la gestoría y novedades para todo el equipo.',
-      type: 'text',
-      created: new Date(Date.now() - 86400000).toISOString(),
+      created: new Date().toISOString(),
       attachments: []
     }
   ],
+  'space_general': [],
   'space_asesores': [],
   'space_urgencias': []
 };
 
-export const STORAGE_KEY_MESSAGES = 'emadrid_chat_messages_v3';
+export const STORAGE_KEY_MESSAGES = 'emadrid_chat_messages_v5';
 export const STORAGE_KEY_USER = 'emadrid_chat_current_user_v3';
 
 export function loadPersistentMessages() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_MESSAGES);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      // Limpiar datos antiguos si aún contienen menciones de dokploy o n8n
+      const itMessages = parsed['space_it'] || [];
+      const hasOldMock = itMessages.some(m => m.content && (m.content.includes('Dokploy') || m.content.includes('n8n')));
+      if (!hasOldMock) {
+        return parsed;
+      }
     }
+    // Si viene de versiones anteriores, limpiar claves antiguas
+    localStorage.removeItem('emadrid_chat_messages_v3');
+    localStorage.removeItem('emadrid_chat_messages_v2');
   } catch (e) {
     console.warn('Error cargando mensajes de localStorage', e);
   }

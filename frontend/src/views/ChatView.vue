@@ -51,6 +51,9 @@
 
       <!-- Modal de Ajustes de Cuenta y Contraseña -->
       <ChangePasswordModal />
+
+      <!-- Modal de Confirmación de Cierre de Sesión -->
+      <LogoutConfirmModal />
     </main>
 
   </div>
@@ -65,6 +68,7 @@ import DocumentVaultDrawer from '@/components/layout/DocumentVaultDrawer.vue';
 import FileLightbox from '@/components/chat/FileLightbox.vue';
 import CommandPalette from '@/components/command/CommandPalette.vue';
 import ChangePasswordModal from '@/components/ui/ChangePasswordModal.vue';
+import LogoutConfirmModal from '@/components/ui/LogoutConfirmModal.vue';
 import { useChatStore } from '@/stores/chat';
 
 const chatStore = useChatStore();

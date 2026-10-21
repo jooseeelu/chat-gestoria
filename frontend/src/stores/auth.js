@@ -169,6 +169,8 @@ export const useAuthStore = defineStore('auth', () => {
     return { success: true, message: '¡Contraseña actualizada correctamente!' };
   }
 
+  const isLogoutModalOpen = ref(false);
+
   function openSettings() {
     isSettingsOpen.value = true;
   }
@@ -177,10 +179,24 @@ export const useAuthStore = defineStore('auth', () => {
     isSettingsOpen.value = false;
   }
 
+  function promptLogout() {
+    isLogoutModalOpen.value = true;
+  }
+
+  function cancelLogout() {
+    isLogoutModalOpen.value = false;
+  }
+
+  function confirmLogout() {
+    isLogoutModalOpen.value = false;
+    logout();
+  }
+
   function logout() {
     currentUser.value = null;
     localStorage.removeItem(STORAGE_KEY_USER);
     isSettingsOpen.value = false;
+    isLogoutModalOpen.value = false;
     try {
       pb.authStore.clear();
     } catch (_) {}
@@ -193,12 +209,16 @@ export const useAuthStore = defineStore('auth', () => {
     isOnline,
     isAuthenticated,
     isSettingsOpen,
+    isLogoutModalOpen,
     userPasswords,
     login,
     updateProfile,
     changePassword,
     openSettings,
     closeSettings,
+    promptLogout,
+    cancelLogout,
+    confirmLogout,
     logout
   };
 });

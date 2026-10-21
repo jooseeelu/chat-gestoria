@@ -219,7 +219,6 @@ function openSettings() {
 
 function handleLogout() {
   emit('close-sidebar');
-  authStore.logout();
-  router.push('/login');
+  authStore.promptLogout();
 }
 </script>

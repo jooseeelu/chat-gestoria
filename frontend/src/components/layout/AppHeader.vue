@@ -168,7 +168,6 @@ function getActiveIcon() {
 }
 
 function handleLogout() {
-  authStore.logout();
-  router.push('/login');
+  authStore.promptLogout();
 }
 </script>
