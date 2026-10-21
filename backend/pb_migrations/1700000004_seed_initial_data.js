@@ -8,6 +8,7 @@ migrate((db) => {
   // 1. Crear usuarios iniciales del equipo (Jose Luis y Johan)
   const initialUsers = [
     {
+      username: "joseluis",
       email: "joseluis@gestoriaemadrid.com",
       name: "Jose Luis",
       role: "admin",
@@ -15,6 +16,7 @@ migrate((db) => {
       status: "online"
     },
     {
+      username: "johan",
       email: "johanfernix9@gmail.com",
       name: "Johan",
       role: "member",
@@ -33,6 +35,7 @@ migrate((db) => {
 
     if (!existingUser) {
       const record = new Record(usersCollection);
+      record.setUsername(u.username);
       record.setEmail(u.email);
       record.setPassword("eMadrid2025!"); // Contraseña temporal inicial
       record.set("name", u.name);
