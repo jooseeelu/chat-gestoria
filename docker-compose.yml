@@ -4,7 +4,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: chat_gestoria_backend
     restart: unless-stopped
     expose:
       - "8090"
@@ -14,11 +13,6 @@ services:
       - ./backend/pb_hooks:/pb/pb_hooks:ro
     environment:
       - PB_ENCRYPTION_KEY=
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8090/api/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
     networks:
       - gestoria_net
 
@@ -29,13 +23,11 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_POCKETBASE_URL: ${VITE_POCKETBASE_URL:-}
-    container_name: chat_gestoria_frontend
     restart: unless-stopped
     expose:
       - "80"
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     networks:
       - gestoria_net
 

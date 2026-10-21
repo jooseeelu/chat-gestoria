@@ -21,5 +21,5 @@ COPY ./pb_hooks /pb/pb_hooks
 
 EXPOSE 8090
 
-# Ejecutar con migraciones automáticas al arrancar
-CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090", "--dir=/pb/pb_data", "--automigrate=1"]
+# Ejecutar PocketBase al arrancar
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090", "--dir=/pb/pb_data"]
