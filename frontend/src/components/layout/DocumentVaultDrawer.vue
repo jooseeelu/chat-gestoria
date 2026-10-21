@@ -71,7 +71,7 @@
               v-model="docStore.searchQuery"
               type="text" 
               placeholder="Buscar por nombre o departamento..."
-              class="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              class="w-full pl-9 pr-4 py-2 text-base sm:text-xs rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             />
           </div>
 

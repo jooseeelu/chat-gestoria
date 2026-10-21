@@ -56,16 +56,16 @@
 
     <!-- Caja de entrada principal estilo Linear / Slack Pro -->
     <div 
-      class="flex items-end gap-2 bg-slate-50 dark:bg-[#070e1b] border border-slate-200 dark:border-slate-800 rounded-2xl p-2 focus-within:ring-2 focus-within:ring-amber-500/30 focus-within:border-amber-500 transition-all duration-200 shadow-inner"
+      class="flex items-end gap-1.5 sm:gap-2 bg-slate-50 dark:bg-[#070e1b] border border-slate-200 dark:border-slate-800 rounded-2xl p-1.5 sm:p-2 focus-within:ring-2 focus-within:ring-amber-500/30 focus-within:border-amber-500 transition-all duration-200 shadow-inner"
     >
       <!-- Botón de Adjuntar Archivo -->
       <button 
         @click="triggerFileInput"
         type="button"
-        class="p-2 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors flex-shrink-0 cursor-pointer"
+        class="p-2.5 sm:p-2 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors flex-shrink-0 cursor-pointer"
         title="Adjuntar documento o captura"
       >
-        <Paperclip class="w-4 h-4" />
+        <Paperclip class="w-5 h-5 sm:w-4 sm:h-4" />
       </button>
 
       <!-- Input invisible para selección de archivos -->
@@ -82,7 +82,7 @@
         ref="textareaRef"
         v-model="text"
         rows="1"
-        :placeholder="`Escribe a ${authStore.peerUser?.name}... (Markdown, código y pegar capturas con Ctrl+V)`"
+        :placeholder="placeholderText"
         class="flex-1 bg-transparent resize-none max-h-36 py-2 px-1 text-base sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
         @keydown="handleKeyDown"
         @paste="handlePaste"
@@ -94,23 +94,23 @@
         <button 
           type="button"
           @click="showEmojiBar = !showEmojiBar"
-          class="p-2 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+          class="p-2.5 sm:p-2 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
           title="Insertar emoji"
         >
-          <Smile class="w-4 h-4" />
+          <Smile class="w-5 h-5 sm:w-4 sm:h-4" />
         </button>
 
         <!-- Popover de emojis comunes -->
         <div 
           v-if="showEmojiBar"
-          class="absolute bottom-11 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 shadow-xl flex items-center gap-1 z-30 animate-fade-in-up"
+          class="absolute bottom-12 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 shadow-xl flex items-center gap-1.5 z-30 animate-fade-in-up"
         >
           <button 
             v-for="e in ['👍', '🚀', '🔥', '👀', '✅', '⚠️', '💡', '🎉']"
             :key="e"
             type="button"
             @click="insertEmoji(e)"
-            class="p-1 text-sm hover:scale-125 transition-transform cursor-pointer"
+            class="p-1 text-base sm:text-sm hover:scale-125 transition-transform cursor-pointer"
           >
             {{ e }}
           </button>
@@ -122,23 +122,23 @@
         @click="submit"
         :disabled="!canSend"
         type="button"
-        class="p-2.5 rounded-xl transition-all duration-200 flex-shrink-0 flex items-center justify-center cursor-pointer"
+        class="w-10 h-10 sm:w-9 sm:h-9 rounded-xl transition-all duration-200 flex-shrink-0 flex items-center justify-center cursor-pointer"
         :class="canSend 
           ? 'bg-amber-600 hover:bg-amber-500 text-white font-bold shadow-md shadow-amber-500/25 active:scale-95' 
           : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'"
         title="Enviar mensaje (Enter)"
       >
-        <Send class="w-4 h-4" />
+        <Send class="w-4 h-4 sm:w-4 sm:h-4" />
       </button>
     </div>
 
     <!-- Micro-hints de teclado estilo Slack/Linear -->
-    <div class="flex items-center justify-between mt-2 px-1 text-[11px] text-slate-500 dark:text-slate-400">
-      <span class="flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-        <span>Conectado con <strong class="text-slate-800 dark:text-white">{{ authStore.peerUser?.name }}</strong></span>
+    <div class="flex items-center justify-between mt-1.5 px-1 text-xs sm:text-[11px] text-slate-500 dark:text-slate-400">
+      <span class="flex items-center gap-1.5 truncate">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+        <span class="truncate">Conectado con <strong class="text-slate-800 dark:text-white">{{ authStore.peerUser?.name }}</strong></span>
       </span>
-      <span class="hidden sm:inline-flex items-center gap-1 font-mono">
+      <span class="hidden sm:inline-flex items-center gap-1 font-mono flex-shrink-0">
         <kbd class="kbd-badge">Enter</kbd> enviar • <kbd class="kbd-badge">`code`</kbd> • <kbd class="kbd-badge">**bold**</kbd>
       </span>
     </div>
@@ -170,6 +170,13 @@ const showEmojiBar = ref(false);
 
 const canSend = computed(() => {
   return text.value.trim().length > 0 || pendingFiles.value.length > 0;
+});
+
+const placeholderText = computed(() => {
+  if (typeof window !== 'undefined' && window.innerWidth < 640) {
+    return 'Escribe un mensaje...';
+  }
+  return `Escribe a ${authStore.peerUser?.name || 'equipo'}... (Markdown, código y pegar capturas con Ctrl+V)`;
 });
 
 function triggerFileInput() {

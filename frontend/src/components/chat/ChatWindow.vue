@@ -20,7 +20,7 @@
           v-model="chatStore.inChatSearch"
           type="text" 
           placeholder="Filtrar mensajes o archivos en este espacio..."
-          class="w-full bg-transparent text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none"
+          class="w-full bg-transparent text-base sm:text-xs text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none"
           autoFocus
         />
         <span v-if="chatStore.inChatSearch" class="text-[10px] text-slate-400 font-mono">

@@ -15,7 +15,7 @@
             v-model="query"
             type="text" 
             placeholder="Escribe un comando o salta a un canal / documento..."
-            class="w-full bg-transparent text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
+            class="w-full bg-transparent text-base sm:text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
             @keydown.down.prevent="navigate(1)"
             @keydown.up.prevent="navigate(-1)"
             @keydown.enter.prevent="selectActive"

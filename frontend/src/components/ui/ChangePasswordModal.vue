@@ -132,7 +132,7 @@
             <input 
               v-model="displayName"
               type="text"
-              class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+              class="w-full px-3 py-2 text-base sm:text-xs rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
             />
           </div>
 
@@ -158,7 +158,7 @@
                 :type="showCurrent ? 'text' : 'password'"
                 required
                 placeholder="••••••••"
-                class="w-full pl-3 pr-9 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                class="w-full pl-3 pr-9 py-2 text-base sm:text-xs rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
               />
               <button 
                 type="button" 
@@ -181,7 +181,7 @@
                 :type="showNew ? 'text' : 'password'"
                 required
                 placeholder="••••••••"
-                class="w-full pl-3 pr-9 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                class="w-full pl-3 pr-9 py-2 text-base sm:text-xs rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
               />
               <button 
                 type="button" 
@@ -204,7 +204,7 @@
                 :type="showConfirm ? 'text' : 'password'"
                 required
                 placeholder="••••••••"
-                class="w-full pl-3 pr-9 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                class="w-full pl-3 pr-9 py-2 text-base sm:text-xs rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
               />
               <button 
                 type="button" 

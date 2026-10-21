@@ -6,19 +6,28 @@
       <SidebarChannels />
     </div>
 
-    <!-- Sidebar Móvil (Drawer) -->
-    <div 
-      v-if="isMobileSidebarOpen"
-      class="fixed inset-0 z-50 lg:hidden flex"
+    <!-- Sidebar Móvil (Drawer con animación fluida) -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0 -translate-x-full"
+      enter-to-class="opacity-100 translate-x-0"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100 translate-x-0"
+      leave-to-class="opacity-0 -translate-x-full"
     >
       <div 
-        class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm"
-        @click="isMobileSidebarOpen = false"
-      ></div>
-      <div class="relative z-10 w-72 h-full">
-        <SidebarChannels />
+        v-if="isMobileSidebarOpen"
+        class="fixed inset-0 z-50 lg:hidden flex"
+      >
+        <div 
+          class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity"
+          @click="isMobileSidebarOpen = false"
+        ></div>
+        <div class="relative z-10 w-80 max-w-[85vw] h-full shadow-2xl">
+          <SidebarChannels @close-sidebar="isMobileSidebarOpen = false" />
+        </div>
       </div>
-    </div>
+    </Transition>
 
     <!-- Área Principal de Chat -->
     <main class="flex-1 flex flex-col h-full min-w-0 relative">
