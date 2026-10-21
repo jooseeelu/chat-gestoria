@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fdf3d6"/>
+      <stop offset="35%" stop-color="#d4af37"/>
+      <stop offset="70%" stop-color="#aa7e30"/>
+      <stop offset="100%" stop-color="#f6e29f"/>
+    </linearGradient>
+    <linearGradient id="navyBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1b2d4f"/>
+      <stop offset="100%" stop-color="#0c172a"/>
+    </linearGradient>
+    <linearGradient id="goldBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d4af37" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#aa7e30" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Contenedor Navy con Borde Dorado -->
+  <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#navyBg)" stroke="url(#goldBorder)" stroke-width="1.5"/>
+  
+  <!-- Letra "G" Majestuosa y Elegante de Gestoría -->
+  <path d="M30 18.5C28.5 16 25.5 14.5 22 14.5C16.5 14.5 12 18.8 12 24C12 29.2 16.5 33.5 22 33.5C27.2 33.5 31 29.8 31.5 25H22V21.5H35.5C35.8 22.8 36 24 36 24.8C36 32 30.5 37.5 22 37.5C14 37.5 7.5 31.5 7.5 24C7.5 16.5 14 10.5 22 10.5C27.2 10.5 31.5 12.8 34.2 16.5L30 18.5Z" fill="url(#goldGrad)"/>
+</svg>
