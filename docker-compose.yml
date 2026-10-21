@@ -17,6 +17,7 @@ services:
       - gestoria_net
 
   # Frontend Vue 3 + Vite servido con Nginx
+  # Expuesto en 127.0.0.1:3005 para el Nginx del host
   frontend:
     build:
       context: ./frontend
@@ -24,8 +25,8 @@ services:
       args:
         VITE_POCKETBASE_URL: ${VITE_POCKETBASE_URL:-}
     restart: unless-stopped
-    expose:
-      - "80"
+    ports:
+      - "127.0.0.1:3005:80"
     depends_on:
       - backend
     networks:
