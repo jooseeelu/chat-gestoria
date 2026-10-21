@@ -47,37 +47,33 @@ migrate((db) => {
     }
   }
 
-  // 2. Crear espacios de trabajo iniciales (Sin hashtags)
+  // 2. Crear espacios de trabajo iniciales de Gestoría eMadrid (Sin hashtags)
   const initialChannels = [
     {
-      name: "Desarrollo & Proyectos",
-      description: "Espacio de trabajo conjunto para código, tareas y arquitectura",
-      icon: "Code2",
+      name: "Gestoría General",
+      description: "Espacio de coordinación general y avisos para todo el equipo",
+      icon: "Building2",
       is_direct: false,
       is_private: false
     },
     {
-      name: "Documentación & Ficheros",
-      description: "Transferencia directa de contratos, especificaciones y archivos",
-      icon: "FolderGit2",
+      name: "Asesoría & Clientes",
+      description: "Consultas de expedientes, tramitaciones fiscales y laborales",
+      icon: "Briefcase",
       is_direct: false,
       is_private: false
     },
     {
-      name: "Fiscal & Facturas",
-      description: "Modelos tributarios, hojas de cálculo y balances contables",
-      icon: "Receipt",
+      name: "Departamento IT & Sistemas",
+      description: "Desarrollo de software, automatizaciones n8n y soporte técnico",
+      icon: "Terminal",
       is_direct: false,
       is_private: false
     },
     {
-      name: "Urgencias & Avisos",
-      description: "Prioridades altas y tareas que requieren atención inmediata",
+      name: "Urgencias & Plazos",
+      description: "Vencimientos tributarios, notificaciones y requerimientos clave",
       icon: "Zap",
-      is_direct: false,
-      is_private: false
-    }
-  ];
       is_direct: false,
       is_private: false
     }
@@ -93,7 +89,7 @@ migrate((db) => {
       record.set("is_private", ch.is_private);
       record.set("members", createdUserIds);
       if (createdUserIds.length > 0) {
-        record.set("created_by", createdUserIds[0]); // Andrés
+        record.set("created_by", createdUserIds[0]);
       }
       dao.saveRecord(record);
     } catch (_) {}
@@ -101,6 +97,5 @@ migrate((db) => {
 
   return null;
 }, (db) => {
-  // En rollback no eliminamos los datos de prueba automáticamente
   return null;
 });
