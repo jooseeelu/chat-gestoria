@@ -80,7 +80,7 @@ migrate((db) => {
     deleteRule: "@request.auth.role = 'admin'"
   });
 
-  return Dao(db).saveCollection(collection);
+  return new Dao(db).saveCollection(collection);
 }, (db) => {
   const dao = new Dao(db);
   const collection = dao.findCollectionByNameOrId("channels");
