@@ -360,10 +360,36 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  let sendTypingDebounce = null;
+  async function emitTyping() {
+    if (!pb || !authStore.currentUser?.id) return;
+    if (sendTypingDebounce) return;
+    sendTypingDebounce = setTimeout(() => {
+      sendTypingDebounce = null;
+    }, 2500);
+
+    try {
+      const activeId = pb.authStore.model?.id || authStore.currentUser.id;
+      await pb.collection('users').update(activeId, {
+        phone: `typing:${activeChannelId.value}:${Date.now()}`
+      });
+    } catch (_) {}
+  }
+
+  async function clearMyTyping() {
+    try {
+      if (pb && (pb.authStore.model?.id || authStore.currentUser?.id)) {
+        const activeId = pb.authStore.model?.id || authStore.currentUser.id;
+        await pb.collection('users').update(activeId, { phone: '' });
+      }
+    } catch (_) {}
+  }
+
+  let typingTimer = null;
   async function subscribeRealtime() {
     try {
       if (pb) {
-        // Suscribirse a mensajes en tiempo real
+        // 1. Suscribirse a mensajes en tiempo real (sin opciones para compatibilidad con PB 0.22)
         await pb.collection('messages').subscribe('*', (e) => {
           if (e.action === 'create') {
             const record = e.record;
@@ -400,7 +426,31 @@ export const useChatStore = defineStore('chat', () => {
           } else if (e.action === 'delete') {
             deleteMessage(e.record.id);
           }
-        }, { expand: 'sender' });
+        });
+
+        // 2. Suscribirse al estado de "Escribiendo..." de los compañeros
+        try {
+          await pb.collection('users').subscribe('*', (e) => {
+            if (e.action === 'update' && e.record) {
+              const rec = e.record;
+              const myId = pb.authStore.model?.id || authStore.currentUser?.id;
+              if (rec.id !== myId && rec.phone && rec.phone.startsWith('typing:')) {
+                const parts = rec.phone.split(':');
+                const typingChannel = parts[1];
+                if (typingChannel === activeChannelId.value) {
+                  isTyping.value = true;
+                  typingUser.value = rec.name || 'Compañero';
+                  if (typingTimer) clearTimeout(typingTimer);
+                  typingTimer = setTimeout(() => {
+                    isTyping.value = false;
+                  }, 4000);
+                }
+              } else if (rec.id !== myId && !rec.phone) {
+                isTyping.value = false;
+              }
+            }
+          });
+        } catch (_) {}
       }
     } catch (err) {
       console.warn('Error en suscripción tiempo real PocketBase:', err.message);
@@ -429,6 +479,8 @@ export const useChatStore = defineStore('chat', () => {
     fetchChannels,
     fetchMessages,
     subscribeRealtime,
+    emitTyping,
+    clearMyTyping,
     setActiveChannel,
     sendMessage,
     deleteMessage,

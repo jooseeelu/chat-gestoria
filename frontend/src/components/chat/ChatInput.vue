@@ -86,7 +86,7 @@
         class="flex-1 bg-transparent resize-none max-h-36 py-2 px-1 text-base sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
         @keydown="handleKeyDown"
         @paste="handlePaste"
-        @input="adjustHeight"
+        @input="onInput"
       ></textarea>
 
       <!-- Selector rápido de emojis -->
@@ -232,6 +232,11 @@ function adjustHeight() {
   el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
 }
 
+function onInput() {
+  adjustHeight();
+  chatStore.emitTyping();
+}
+
 function handleKeyDown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -248,6 +253,7 @@ async function submit() {
   text.value = '';
   pendingFiles.value = [];
   showEmojiBar.value = false;
+  chatStore.clearMyTyping();
 
   nextTick(() => {
     if (textareaRef.value) {
