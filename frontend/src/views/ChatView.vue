@@ -81,6 +81,7 @@ function openCommandPalette() {
 
 onMounted(() => {
   chatStore.fetchChannels();
+  chatStore.fetchMessages();
   chatStore.subscribeRealtime();
 });
 </script>

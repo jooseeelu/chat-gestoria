@@ -60,6 +60,7 @@ export const useChatStore = defineStore('chat', () => {
       messagesByChannel.value[channelId] = [];
       savePersistentMessages(messagesByChannel.value);
     }
+    fetchMessages(channelId);
   }
 
   function toggleSound() {
@@ -166,15 +167,22 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     try {
-      if (pb.authStore.isValid) {
-        await pb.collection('messages').create({
+      if (pb && pb.authStore.isValid) {
+        const record = await pb.collection('messages').create({
           channel: channelId,
-          sender: sender.id,
+          sender: pb.authStore.model?.id || sender.id,
           content: content.trim(),
-          type: newMessage.type
+          type: newMessage.type,
+          reactions: {}
         });
+        if (record && record.id) {
+          newMessage.id = record.id;
+          savePersistentMessages(messagesByChannel.value);
+        }
       }
-    } catch (_) {}
+    } catch (err) {
+      console.warn('Error enviando mensaje a PocketBase:', err);
+    }
   }
 
   /**
@@ -225,8 +233,117 @@ export const useChatStore = defineStore('chat', () => {
     savePersistentMessages(messagesByChannel.value);
   }
 
-  function fetchChannels() {}
-  function subscribeRealtime() {}
+  async function fetchChannels() {
+    try {
+      if (pb && pb.authStore.isValid) {
+        const records = await pb.collection('channels').getFullList({
+          sort: 'created'
+        });
+        if (records && records.length > 0) {
+          channels.value = records.map(r => ({
+            id: r.id,
+            name: r.name,
+            department: r.department || r.name,
+            description: r.description || '',
+            icon: r.icon || 'Hash',
+            unread_count: 0
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Usando canales locales predeterminados:', e.message);
+    }
+  }
+
+  async function fetchMessages(channelId = activeChannelId.value) {
+    try {
+      if (pb && pb.authStore.isValid) {
+        const records = await pb.collection('messages').getList(1, 100, {
+          filter: `channel = "${channelId}"`,
+          sort: 'created',
+          expand: 'sender'
+        });
+
+        if (records.items && records.items.length > 0) {
+          messagesByChannel.value[channelId] = records.items.map(r => {
+            const senderUser = authStore.teamMembers.find(u => u.id === r.sender || u.email === r.expand?.sender?.email) || {
+              id: r.sender,
+              name: r.expand?.sender?.name || 'Compañero',
+              avatar: r.expand?.sender?.avatar || '',
+              role: r.expand?.sender?.role || 'member'
+            };
+            return {
+              id: r.id,
+              channel: r.channel,
+              sender: senderUser,
+              content: r.content,
+              type: r.type || 'text',
+              created: r.created,
+              attachments: [],
+              reactions: r.reactions || {}
+            };
+          });
+          savePersistentMessages(messagesByChannel.value);
+        }
+      }
+    } catch (e) {
+      console.warn('Error cargando mensajes de PocketBase:', e.message);
+    }
+  }
+
+  async function subscribeRealtime() {
+    try {
+      if (pb) {
+        // Suscribirse a mensajes en tiempo real
+        await pb.collection('messages').subscribe('*', (e) => {
+          if (e.action === 'create') {
+            const record = e.record;
+            const chId = record.channel;
+            if (!messagesByChannel.value[chId]) {
+              messagesByChannel.value[chId] = [];
+            }
+
+            // Evitar duplicar el mensaje si ya se insertó localmente
+            const alreadyExists = messagesByChannel.value[chId].some(
+              m => m.id === record.id || (m.content === record.content && m.sender?.id === record.sender)
+            );
+
+            if (!alreadyExists) {
+              const senderUser = authStore.teamMembers.find(
+                u => u.id === record.sender || u.email === record.expand?.sender?.email
+              ) || {
+                id: record.sender,
+                name: record.expand?.sender?.name || 'Compañero',
+                avatar: record.expand?.sender?.avatar || '',
+                role: record.expand?.sender?.role || 'member'
+              };
+
+              messagesByChannel.value[chId].push({
+                id: record.id,
+                channel: chId,
+                sender: senderUser,
+                content: record.content,
+                type: record.type || 'text',
+                created: record.created,
+                attachments: [],
+                reactions: record.reactions || {}
+              });
+
+              savePersistentMessages(messagesByChannel.value);
+
+              if (soundEnabled.value) {
+                playChimeSound('receive');
+              }
+            }
+          } else if (e.action === 'delete') {
+            deleteMessage(e.record.id);
+          }
+        }, { expand: 'sender' });
+      }
+    } catch (err) {
+      console.warn('Error en suscripción tiempo real PocketBase:', err.message);
+    }
+  }
 
   return {
     channels,

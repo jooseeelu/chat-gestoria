@@ -68,29 +68,50 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(email, password) {
     const cleanEmail = email.toLowerCase().trim();
     
-    const user = teamMembers.value.find(u => u.email.toLowerCase() === cleanEmail);
+    // 1. Intentar autenticar contra PocketBase
+    let pbUser = null;
+    try {
+      if (pb) {
+        const authData = await pb.collection('users').authWithPassword(cleanEmail, password);
+        pbUser = authData?.record;
+      }
+    } catch (e) {
+      console.warn('PocketBase auth falló o modo offline:', e.message);
+    }
+
+    // 2. Si autenticó en PocketBase o existe en el equipo
+    let user = teamMembers.value.find(u => u.email.toLowerCase() === cleanEmail);
+    if (!user && pbUser) {
+      user = {
+        id: pbUser.id,
+        name: pbUser.name || pbUser.username || cleanEmail.split('@')[0],
+        email: pbUser.email,
+        role: pbUser.role || 'member',
+        department: pbUser.department || 'IT & Sistemas',
+        position: pbUser.position || 'Miembro',
+        status: 'online',
+        avatar: pbUser.avatar ? pb.files.getUrl(pbUser, pbUser.avatar) : ''
+      };
+      teamMembers.value.push(user);
+    }
+
     if (!user) {
       return { success: false, error: 'Usuario no autorizado en el sistema' };
     }
 
-    const expectedPassword = userPasswords.value[user.id] || 'eMadrid2025!';
+    if (!pbUser) {
+      const expectedPassword = userPasswords.value[user.id] || 'eMadrid2025!';
+      const isPasswordValid = password === expectedPassword || 
+                             password === 'eMadrid2025!' || 
+                             password === 'eMadrid2025';
 
-    const isPasswordValid = password === expectedPassword || 
-                           password === 'eMadrid2025!' || 
-                           password === 'eMadrid2025';
-
-    if (!isPasswordValid) {
-      return { success: false, error: 'Contraseña incorrecta' };
+      if (!isPasswordValid) {
+        return { success: false, error: 'Contraseña incorrecta' };
+      }
     }
 
     currentUser.value = { ...user };
     localStorage.setItem(STORAGE_KEY_USER, user.id);
-
-    try {
-      if (pb) {
-        await pb.collection('users').authWithPassword(email, password);
-      }
-    } catch (_) {}
 
     return { success: true };
   }
