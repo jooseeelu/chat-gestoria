@@ -183,6 +183,37 @@ export const useChatStore = defineStore('chat', () => {
           });
           if (record && record.id) {
             newMessage.id = record.id;
+
+            // Subir cada archivo a la colección de attachments de PocketBase
+            if (files && files.length > 0) {
+              for (let i = 0; i < files.length; i++) {
+                try {
+                  const file = files[i];
+                  const fileType = detectFileType(file.name, file.type);
+                  const formData = new FormData();
+                  formData.append('channel', channelId);
+                  formData.append('message', record.id);
+                  formData.append('uploader', pb.authStore.model?.id || sender.id);
+                  formData.append('file', file);
+                  formData.append('filename', file.name);
+                  formData.append('file_type', fileType);
+                  formData.append('size', file.size);
+                  formData.append('mime_type', file.type || 'application/octet-stream');
+
+                  const attRecord = await pb.collection('attachments').create(formData);
+                  if (attRecord && attRecord.file) {
+                    const realUrl = pb.files.getUrl(attRecord, attRecord.file);
+                    if (newMessage.attachments[i]) {
+                      newMessage.attachments[i].id = attRecord.id;
+                      newMessage.attachments[i].url = realUrl;
+                    }
+                  }
+                } catch (attErr) {
+                  console.warn('Error subiendo archivo a PocketBase:', attErr);
+                }
+              }
+            }
+
             savePersistentMessages(messagesByChannel.value);
           }
         }
@@ -333,23 +364,53 @@ export const useChatStore = defineStore('chat', () => {
   async function fetchMessages(channelId = activeChannelId.value) {
     try {
       if (pb) {
-        const records = await pb.collection('messages').getList(1, 100, {
-          filter: `channel = "${channelId}" && type != "system"`,
-          sort: 'created',
-          expand: 'sender'
-        });
+        const [messagesRes, attachmentsRes] = await Promise.all([
+          pb.collection('messages').getList(1, 100, {
+            filter: `channel = "${channelId}" && type != "system"`,
+            sort: 'created',
+            expand: 'sender'
+          }),
+          pb.collection('attachments').getFullList({
+            filter: `channel = "${channelId}"`,
+            sort: 'created'
+          }).catch(() => [])
+        ]);
 
-        if (records.items && records.items.length > 0) {
-          messagesByChannel.value[channelId] = records.items.map(r => {
+        // Mapear adjuntos por ID de mensaje
+        const attMap = {};
+        for (const att of (attachmentsRes || [])) {
+          if (att.message) {
+            if (!attMap[att.message]) attMap[att.message] = [];
+            attMap[att.message].push({
+              id: att.id,
+              filename: att.filename,
+              file_type: att.file_type || detectFileType(att.filename, att.mime_type),
+              size: att.size,
+              url: pb.files.getUrl(att, att.file)
+            });
+          }
+        }
+
+        if (messagesRes.items && messagesRes.items.length > 0) {
+          const currentList = messagesByChannel.value[channelId] || [];
+
+          messagesByChannel.value[channelId] = messagesRes.items.map(r => {
             const senderUser = resolveSenderProfile(r.sender, r.expand?.sender);
+            
+            // Si el mensaje ya tenía adjuntos locales en memoria, preservarlos para que nunca se borren
+            const existingMsg = currentList.find(m => m.id === r.id);
+            const resolvedAttachments = (attMap[r.id] && attMap[r.id].length > 0) 
+              ? attMap[r.id] 
+              : (existingMsg?.attachments || []);
+
             return {
               id: r.id,
               channel: r.channel,
               sender: senderUser,
               content: r.content,
-              type: r.type || 'text',
+              type: r.type || (resolvedAttachments.length > 0 ? 'file' : 'text'),
               created: r.created,
-              attachments: [],
+              attachments: resolvedAttachments,
               reactions: r.reactions || {}
             };
           });
@@ -433,6 +494,10 @@ export const useChatStore = defineStore('chat', () => {
               });
 
               savePersistentMessages(messagesByChannel.value);
+
+              if (record.type === 'file') {
+                setTimeout(() => fetchMessages(chId), 400);
+              }
 
               if (soundEnabled.value) {
                 playChimeSound('receive');
