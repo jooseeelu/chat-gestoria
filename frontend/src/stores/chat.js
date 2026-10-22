@@ -466,6 +466,21 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  let pollingInterval = null;
+  function startPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    pollingInterval = setInterval(() => {
+      fetchMessages(activeChannelId.value);
+    }, 2000);
+  }
+
+  function stopPolling() {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+  }
+
   return {
     channels,
     activeChannelId,
@@ -488,6 +503,8 @@ export const useChatStore = defineStore('chat', () => {
     fetchChannels,
     fetchMessages,
     subscribeRealtime,
+    startPolling,
+    stopPolling,
     emitTyping,
     clearMyTyping,
     setActiveChannel,

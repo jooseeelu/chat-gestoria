@@ -60,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import SidebarChannels from '@/components/layout/SidebarChannels.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
 import ChatWindow from '@/components/chat/ChatWindow.vue';
@@ -85,5 +85,10 @@ onMounted(async () => {
   await authStore.initAuth();
   await chatStore.fetchChannels();
   chatStore.subscribeRealtime();
+  chatStore.startPolling();
+});
+
+onUnmounted(() => {
+  chatStore.stopPolling();
 });
 </script>
