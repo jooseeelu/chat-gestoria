@@ -227,6 +227,20 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (_) {}
   }
 
+  async function initAuth() {
+    if (pb && !pb.authStore.isValid && currentUser.value?.email) {
+      try {
+        const password = userPasswords.value[currentUser.value.id] || 'eMadrid2025!';
+        const authData = await pb.collection('users').authWithPassword(currentUser.value.email, password);
+        if (authData?.record) {
+          currentUser.value.id = authData.record.id;
+        }
+      } catch (e) {
+        console.warn('PocketBase auto-login:', e.message);
+      }
+    }
+  }
+
   return {
     currentUser,
     teamMembers,
@@ -237,6 +251,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLogoutModalOpen,
     userPasswords,
     login,
+    initAuth,
     updateProfile,
     changePassword,
     openSettings,

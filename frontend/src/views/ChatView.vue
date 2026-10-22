@@ -70,8 +70,10 @@ import CommandPalette from '@/components/command/CommandPalette.vue';
 import ChangePasswordModal from '@/components/ui/ChangePasswordModal.vue';
 import LogoutConfirmModal from '@/components/ui/LogoutConfirmModal.vue';
 import { useChatStore } from '@/stores/chat';
+import { useAuthStore } from '@/stores/auth';
 
 const chatStore = useChatStore();
+const authStore = useAuthStore();
 const commandPaletteRef = ref(null);
 const isMobileSidebarOpen = ref(false);
 
@@ -79,9 +81,9 @@ function openCommandPalette() {
   commandPaletteRef.value?.open();
 }
 
-onMounted(() => {
-  chatStore.fetchChannels();
-  chatStore.fetchMessages();
+onMounted(async () => {
+  await authStore.initAuth();
+  await chatStore.fetchChannels();
   chatStore.subscribeRealtime();
 });
 </script>
