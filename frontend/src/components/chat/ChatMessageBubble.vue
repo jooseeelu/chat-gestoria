@@ -52,8 +52,9 @@
         <Copy v-else class="w-4 h-4 sm:w-3.5 sm:h-3.5" />
       </button>
 
-      <!-- Eliminar -->
+      <!-- Eliminar (solo el autor o admin) -->
       <button 
+        v-if="canDelete"
         @click="chatStore.deleteMessage(message.id); isMobileActionsOpen = false"
         class="p-1.5 sm:p-1 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
         title="Eliminar mensaje"
@@ -252,8 +253,18 @@ const isMobileActionsOpen = ref(false);
 const quickEmojis = ['👍', '🚀', '👀', '❤️', '🔥'];
 
 const isCurrentUser = computed(() => {
-  return props.message.sender.id === authStore.currentUser?.id ||
-         props.message.sender.name === authStore.currentUser?.name;
+  const myId = authStore.currentUser?.id;
+  const myName = authStore.currentUser?.name?.toLowerCase();
+  const senderId = props.message.sender?.id;
+  const senderName = props.message.sender?.name?.toLowerCase();
+
+  if (myId && senderId && myId === senderId) return true;
+  if (myName && senderName && (myName === senderName || myName.includes(senderName) || senderName.includes(myName))) return true;
+  return false;
+});
+
+const canDelete = computed(() => {
+  return isCurrentUser.value || authStore.currentUser?.role === 'admin';
 });
 
 const hasReactions = computed(() => {

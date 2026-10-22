@@ -226,11 +226,20 @@ export const useChatStore = defineStore('chat', () => {
     savePersistentMessages(messagesByChannel.value);
   }
 
-  function deleteMessage(messageId) {
+  async function deleteMessage(messageId) {
     const channelId = activeChannelId.value;
     if (messagesByChannel.value[channelId]) {
       messagesByChannel.value[channelId] = messagesByChannel.value[channelId].filter(m => m.id !== messageId);
       savePersistentMessages(messagesByChannel.value);
+    }
+
+    try {
+      if (pb) {
+        // Asegurar que si es ID de PocketBase se elimina permanentemente de la base de datos
+        await pb.collection('messages').delete(messageId);
+      }
+    } catch (e) {
+      console.warn('Error eliminando mensaje en PocketBase:', e.message);
     }
   }
 
