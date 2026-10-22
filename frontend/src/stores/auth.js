@@ -227,6 +227,48 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (_) {}
   }
 
+  async function fetchTeamMembers() {
+    try {
+      if (pb) {
+        const records = await pb.collection('users').getFullList({ sort: 'created' });
+        if (records && records.length > 0) {
+          teamMembers.value = records.map(r => {
+            let avatarUrl = '';
+            if (r.avatar) {
+              avatarUrl = pb.files.getUrl(r, r.avatar, { thumb: '160x160' });
+            } else if (customProfiles.value[r.id]?.avatar) {
+              avatarUrl = customProfiles.value[r.id].avatar;
+            } else if (r.name?.toLowerCase().includes('jose') || r.email?.toLowerCase().includes('jose')) {
+              avatarUrl = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80';
+            } else {
+              avatarUrl = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80';
+            }
+
+            return {
+              id: r.id,
+              name: r.name || r.username,
+              email: r.email,
+              role: r.role || 'member',
+              department: r.department || 'IT & Sistemas',
+              position: r.position || 'Desarrollador',
+              status: r.status || 'online',
+              avatar: avatarUrl
+            };
+          });
+
+          if (currentUser.value) {
+            const me = teamMembers.value.find(u => u.id === currentUser.value.id || u.email?.toLowerCase() === currentUser.value.email?.toLowerCase());
+            if (me) {
+              currentUser.value = { ...me };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Error cargando miembros de PocketBase:', e);
+    }
+  }
+
   async function initAuth() {
     if (pb && !pb.authStore.isValid && currentUser.value?.email) {
       try {
@@ -239,6 +281,7 @@ export const useAuthStore = defineStore('auth', () => {
         console.warn('PocketBase auto-login:', e.message);
       }
     }
+    await fetchTeamMembers();
   }
 
   return {
@@ -252,6 +295,7 @@ export const useAuthStore = defineStore('auth', () => {
     userPasswords,
     login,
     initAuth,
+    fetchTeamMembers,
     updateProfile,
     changePassword,
     openSettings,

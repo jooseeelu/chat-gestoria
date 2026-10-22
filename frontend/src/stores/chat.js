@@ -284,7 +284,13 @@ export const useChatStore = defineStore('chat', () => {
     const expandName = (expandSender?.name || expandSender?.username || '').toLowerCase();
     const expandEmail = (expandSender?.email || '').toLowerCase();
 
-    // 1. Buscar en teamMembers por ID, email o nombre aproximado
+    // 1. Si PocketBase tiene un archivo de avatar subido, ¡USARLO SIEMPRE!
+    let pbAvatar = '';
+    if (expandSender?.avatar && pb) {
+      pbAvatar = pb.files.getUrl(expandSender, expandSender.avatar, { thumb: '160x160' });
+    }
+
+    // 2. Buscar en teamMembers por ID, email o nombre
     const matched = authStore.teamMembers.find(u => {
       if (u.id === senderId) return true;
       if (expandEmail && u.email?.toLowerCase() === expandEmail) return true;
@@ -300,49 +306,35 @@ export const useChatStore = defineStore('chat', () => {
     if (matched) {
       return {
         id: senderId,
-        name: matched.name,
-        avatar: matched.avatar,
-        role: matched.role || expandSender?.role || 'member',
+        name: expandSender?.name || matched.name,
+        avatar: pbAvatar || matched.avatar,
+        role: expandSender?.role || matched.role || 'member',
         position: matched.position || 'IT & Sistemas'
       };
     }
 
-    // 2. Si es Jose Luis
-    if (expandName.includes('jose') || expandEmail.includes('jose')) {
-      return {
-        id: senderId,
-        name: expandSender?.name || 'Jose Luis',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
-        role: 'admin',
-        position: 'Desarrollador'
-      };
-    }
-
-    // 3. Si es Johan
-    if (expandName.includes('johan') || expandEmail.includes('johan')) {
-      return {
-        id: senderId,
-        name: expandSender?.name || 'Johan',
-        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80',
-        role: 'member',
-        position: 'Desarrollador'
-      };
-    }
+    // 3. Fallback solo si no hay ninguna foto real subida
+    const isJose = expandName.includes('jose') || expandEmail.includes('jose');
+    const isJohan = expandName.includes('johan') || expandEmail.includes('johan');
 
     return {
       id: senderId,
-      name: expandSender?.name || 'Compañero',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
+      name: expandSender?.name || (isJose ? 'Jose Luis' : isJohan ? 'Johan' : 'Compañero'),
+      avatar: pbAvatar || (isJose 
+        ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80' 
+        : isJohan 
+        ? 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80' 
+        : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80'),
       role: expandSender?.role || 'member',
-      position: 'Miembro'
+      position: 'Desarrollador'
     };
   }
 
   async function fetchMessages(channelId = activeChannelId.value) {
     try {
-      if (pb && pb.authStore.isValid) {
+      if (pb) {
         const records = await pb.collection('messages').getList(1, 100, {
-          filter: `channel = "${channelId}"`,
+          filter: `channel = "${channelId}" && type != "system"`,
           sort: 'created',
           expand: 'sender'
         });
@@ -369,45 +361,59 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  let sendTypingDebounce = null;
+  let lastTypingSent = 0;
   async function emitTyping() {
-    if (!pb || !authStore.currentUser?.id) return;
-    if (sendTypingDebounce) return;
-    sendTypingDebounce = setTimeout(() => {
-      sendTypingDebounce = null;
-    }, 2500);
+    if (!pb) return;
+    const now = Date.now();
+    if (now - lastTypingSent < 2000) return;
+    lastTypingSent = now;
 
     try {
-      const activeId = pb.authStore.model?.id || authStore.currentUser.id;
-      await pb.collection('users').update(activeId, {
-        phone: `typing:${activeChannelId.value}:${Date.now()}`
+      const senderId = pb.authStore.model?.id || authStore.currentUser?.id;
+      if (!senderId) return;
+      await pb.collection('messages').create({
+        channel: activeChannelId.value,
+        sender: senderId,
+        content: '__TYPING__',
+        type: 'system',
+        reactions: {}
       });
     } catch (_) {}
   }
 
-  async function clearMyTyping() {
-    try {
-      if (pb && (pb.authStore.model?.id || authStore.currentUser?.id)) {
-        const activeId = pb.authStore.model?.id || authStore.currentUser.id;
-        await pb.collection('users').update(activeId, { phone: '' });
-      }
-    } catch (_) {}
-  }
+  async function clearMyTyping() {}
 
   let typingTimer = null;
   async function subscribeRealtime() {
     try {
       if (pb) {
-        // 1. Suscribirse a mensajes en tiempo real (sin opciones para compatibilidad con PB 0.22)
+        // Suscribirse a mensajes y eventos de escritura en tiempo real
         await pb.collection('messages').subscribe('*', (e) => {
           if (e.action === 'create') {
             const record = e.record;
             const chId = record.channel;
+
+            // Detección en tiempo real de "Escribiendo..."
+            if (record.type === 'system' && record.content === '__TYPING__') {
+              const myId = pb.authStore.model?.id || authStore.currentUser?.id;
+              if (record.sender !== myId && chId === activeChannelId.value) {
+                const senderUser = resolveSenderProfile(record.sender, record.expand?.sender);
+                isTyping.value = true;
+                typingUser.value = senderUser.name || 'Compañero';
+                if (typingTimer) clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => {
+                  isTyping.value = false;
+                }, 3500);
+              }
+              // Limpiar el ping de la base de datos de inmediato
+              pb.collection('messages').delete(record.id).catch(() => {});
+              return;
+            }
+
             if (!messagesByChannel.value[chId]) {
               messagesByChannel.value[chId] = [];
             }
 
-            // Evitar duplicar el mensaje si ya se insertó localmente
             const alreadyExists = messagesByChannel.value[chId].some(
               m => m.id === record.id || (m.content === record.content && m.sender?.id === record.sender)
             );
@@ -436,30 +442,6 @@ export const useChatStore = defineStore('chat', () => {
             deleteMessage(e.record.id);
           }
         });
-
-        // 2. Suscribirse al estado de "Escribiendo..." de los compañeros
-        try {
-          await pb.collection('users').subscribe('*', (e) => {
-            if (e.action === 'update' && e.record) {
-              const rec = e.record;
-              const myId = pb.authStore.model?.id || authStore.currentUser?.id;
-              if (rec.id !== myId && rec.phone && rec.phone.startsWith('typing:')) {
-                const parts = rec.phone.split(':');
-                const typingChannel = parts[1];
-                if (typingChannel === activeChannelId.value) {
-                  isTyping.value = true;
-                  typingUser.value = rec.name || 'Compañero';
-                  if (typingTimer) clearTimeout(typingTimer);
-                  typingTimer = setTimeout(() => {
-                    isTyping.value = false;
-                  }, 4000);
-                }
-              } else if (rec.id !== myId && !rec.phone) {
-                isTyping.value = false;
-              }
-            }
-          });
-        } catch (_) {}
       }
     } catch (err) {
       console.warn('Error en suscripción tiempo real PocketBase:', err.message);
