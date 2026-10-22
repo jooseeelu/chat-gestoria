@@ -271,6 +271,64 @@ export const useChatStore = defineStore('chat', () => {
     await fetchMessages(activeChannelId.value);
   }
 
+  function resolveSenderProfile(senderId, expandSender) {
+    const expandName = (expandSender?.name || expandSender?.username || '').toLowerCase();
+    const expandEmail = (expandSender?.email || '').toLowerCase();
+
+    // 1. Buscar en teamMembers por ID, email o nombre aproximado
+    const matched = authStore.teamMembers.find(u => {
+      if (u.id === senderId) return true;
+      if (expandEmail && u.email?.toLowerCase() === expandEmail) return true;
+      if (expandName) {
+        const uName = (u.name || '').toLowerCase();
+        if (uName.includes('jose') && expandName.includes('jose')) return true;
+        if (uName.includes('johan') && expandName.includes('johan')) return true;
+        if (uName === expandName) return true;
+      }
+      return false;
+    });
+
+    if (matched) {
+      return {
+        id: senderId,
+        name: matched.name,
+        avatar: matched.avatar,
+        role: matched.role || expandSender?.role || 'member',
+        position: matched.position || 'IT & Sistemas'
+      };
+    }
+
+    // 2. Si es Jose Luis
+    if (expandName.includes('jose') || expandEmail.includes('jose')) {
+      return {
+        id: senderId,
+        name: expandSender?.name || 'Jose Luis',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
+        role: 'admin',
+        position: 'Desarrollador'
+      };
+    }
+
+    // 3. Si es Johan
+    if (expandName.includes('johan') || expandEmail.includes('johan')) {
+      return {
+        id: senderId,
+        name: expandSender?.name || 'Johan',
+        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80',
+        role: 'member',
+        position: 'Desarrollador'
+      };
+    }
+
+    return {
+      id: senderId,
+      name: expandSender?.name || 'Compañero',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
+      role: expandSender?.role || 'member',
+      position: 'Miembro'
+    };
+  }
+
   async function fetchMessages(channelId = activeChannelId.value) {
     try {
       if (pb && pb.authStore.isValid) {
@@ -282,12 +340,7 @@ export const useChatStore = defineStore('chat', () => {
 
         if (records.items && records.items.length > 0) {
           messagesByChannel.value[channelId] = records.items.map(r => {
-            const senderUser = authStore.teamMembers.find(u => u.id === r.sender || u.email === r.expand?.sender?.email) || {
-              id: r.sender,
-              name: r.expand?.sender?.name || 'Compañero',
-              avatar: r.expand?.sender?.avatar || '',
-              role: r.expand?.sender?.role || 'member'
-            };
+            const senderUser = resolveSenderProfile(r.sender, r.expand?.sender);
             return {
               id: r.id,
               channel: r.channel,
@@ -325,14 +378,7 @@ export const useChatStore = defineStore('chat', () => {
             );
 
             if (!alreadyExists) {
-              const senderUser = authStore.teamMembers.find(
-                u => u.id === record.sender || u.email === record.expand?.sender?.email
-              ) || {
-                id: record.sender,
-                name: record.expand?.sender?.name || 'Compañero',
-                avatar: record.expand?.sender?.avatar || '',
-                role: record.expand?.sender?.role || 'member'
-              };
+              const senderUser = resolveSenderProfile(record.sender, record.expand?.sender);
 
               messagesByChannel.value[chId].push({
                 id: record.id,

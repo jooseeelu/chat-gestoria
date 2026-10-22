@@ -67,8 +67,9 @@
       <!-- Avatar -->
       <div class="relative flex-shrink-0 pt-0.5">
         <img 
-          :src="message.sender.avatar" 
+          :src="message.sender.avatar || (message.sender.name?.toLowerCase().includes('jose') ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80' : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80')" 
           :alt="message.sender.name"
+          @error="$event.target.src = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80'"
           class="w-9 h-9 sm:w-8 sm:h-8 rounded-xl object-cover ring-1 ring-slate-300 dark:ring-slate-700"
         />
         <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"></span>
