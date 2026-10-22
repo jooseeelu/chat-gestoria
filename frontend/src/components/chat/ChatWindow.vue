@@ -157,6 +157,13 @@ watch(
 );
 
 watch(
+  () => chatStore.isTyping,
+  (typing) => {
+    if (typing) scrollToBottom();
+  }
+);
+
+watch(
   () => chatStore.activeChannelId,
   () => {
     scrollToBottom();

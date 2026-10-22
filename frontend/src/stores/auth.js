@@ -270,15 +270,42 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function initAuth() {
-    if (pb && !pb.authStore.isValid && currentUser.value?.email) {
+    if (pb) {
       try {
-        const password = userPasswords.value[currentUser.value.id] || 'eMadrid2025!';
-        const authData = await pb.collection('users').authWithPassword(currentUser.value.email, password);
-        if (authData?.record) {
-          currentUser.value.id = authData.record.id;
+        if (!pb.authStore.isValid) {
+          // 1. Intentar sesión admin si es necesario para sincronizar
+          try {
+            await pb.admins.authWithPassword('tu-email@gestoriainnova.com', 'TuPasswordSegura');
+          } catch (_) {}
+
+          // 2. Autenticar usuario actual
+          const userEmail = currentUser.value?.email;
+          if (userEmail) {
+            try {
+              const authData = await pb.collection('users').authWithPassword(userEmail, 'eMadrid2025!');
+              if (authData?.record) {
+                currentUser.value.id = authData.record.id;
+              }
+            } catch (_) {
+              // Si la contraseña no estaba sincronizada con eMadrid2025!, resetearla usando admin
+              if (pb.authStore.isAdmin) {
+                const users = await pb.collection('users').getFullList({ filter: `email = "${userEmail}"` });
+                if (users.length > 0) {
+                  await pb.collection('users').update(users[0].id, {
+                    password: 'eMadrid2025!',
+                    passwordConfirm: 'eMadrid2025!'
+                  });
+                  const authData = await pb.collection('users').authWithPassword(userEmail, 'eMadrid2025!');
+                  if (authData?.record) {
+                    currentUser.value.id = authData.record.id;
+                  }
+                }
+              }
+            }
+          }
         }
       } catch (e) {
-        console.warn('PocketBase auto-login:', e.message);
+        console.warn('PocketBase auth init:', e);
       }
     }
     await fetchTeamMembers();
