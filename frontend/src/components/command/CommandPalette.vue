@@ -85,7 +85,8 @@ import {
   KeyRound,
   BellRing,
   BellOff,
-  MonitorDown
+  MonitorDown,
+  Trash2
 } from 'lucide-vue-next';
 import { useChatStore } from '@/stores/chat';
 import { useDocumentStore } from '@/stores/documents';
@@ -137,6 +138,14 @@ const allItems = computed(() => {
     category: 'Tema',
     icon: isDark.value ? Sun : Moon,
     action: () => toggleDark()
+  });
+
+  items.push({
+    id: 'act_trash',
+    label: 'Abrir la papelera de mensajes',
+    category: 'Acción',
+    icon: Trash2,
+    action: () => chatStore.openTrash()
   });
 
   items.push({

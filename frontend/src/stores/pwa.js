@@ -80,18 +80,59 @@ export const usePwaStore = defineStore('pwa', () => {
     if (!me) return;
 
     try {
-      await pb.collection('push_subscriptions').getFirstListItem(
+      const existing = await pb.collection('push_subscriptions').getFirstListItem(
         pb.filter('endpoint = {:ep}', { ep: json.endpoint })
       );
-      return; // ya estaba guardada para mí
-    } catch (_) {}
+      subscriptionRecordId = existing.id; // ya estaba guardada para mí
+    } catch (_) {
+      const created = await pb.collection('push_subscriptions').create({
+        user: me,
+        endpoint: json.endpoint,
+        keys: json.keys,
+        user_agent: navigator.userAgent.slice(0, 300)
+      });
+      subscriptionRecordId = created.id;
+    }
+    startPresence();
+  }
 
-    await pb.collection('push_subscriptions').create({
-      user: me,
-      endpoint: json.endpoint,
-      keys: json.keys,
-      user_agent: navigator.userAgent.slice(0, 300)
-    });
+  // ---------- Presencia: push solo cuando estás fuera de la app ----------
+  // Mientras la app está visible, este dispositivo avisa cada 25 s de que está dentro
+  // y el servidor no le manda notificaciones. Si se cierra sin avisar, a los 45 s
+  // el servidor vuelve a considerarlo fuera.
+
+  let subscriptionRecordId = null;
+  let presenceTimer = null;
+  let presenceListening = false;
+
+  function setPresence(active) {
+    if (!subscriptionRecordId || !pb.authStore.isValid) return;
+    pb.collection('push_subscriptions')
+      .update(subscriptionRecordId, { active_at: active ? new Date().toISOString() : '' }, { keepalive: true })
+      .catch(() => {});
+  }
+
+  function onVisibilityForPresence() {
+    const visible = document.visibilityState === 'visible';
+    setPresence(visible);
+    if (presenceTimer) clearInterval(presenceTimer);
+    presenceTimer = visible ? setInterval(() => setPresence(true), 25_000) : null;
+  }
+
+  function startPresence() {
+    if (!presenceListening) {
+      presenceListening = true;
+      document.addEventListener('visibilitychange', onVisibilityForPresence);
+      window.addEventListener('pagehide', () => setPresence(false));
+    }
+    onVisibilityForPresence();
+  }
+
+  function stopPresence() {
+    if (presenceTimer) clearInterval(presenceTimer);
+    presenceTimer = null;
+    setPresence(false);
+    subscriptionRecordId = null;
   }
 
   async function subscribe() {
@@ -158,6 +199,7 @@ export const usePwaStore = defineStore('pwa', () => {
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
+      stopPresence();
       await removeSubscriptionRecord(subscription);
       await subscription?.unsubscribe();
       pushEnabled.value = false;
@@ -216,6 +258,7 @@ export const usePwaStore = defineStore('pwa', () => {
     try {
       const registration = await navigator.serviceWorker.getRegistration();
       const subscription = await registration?.pushManager.getSubscription();
+      stopPresence();
       await removeSubscriptionRecord(subscription);
     } catch (_) {}
     pushEnabled.value = false;

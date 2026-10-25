@@ -35,6 +35,25 @@
       </button>
     </div>
 
+    <!-- BANNER DE EDICIÓN (como WhatsApp) -->
+    <div
+      v-if="chatStore.editingMessage"
+      class="mb-2.5 flex items-center justify-between bg-sky-500/10 border-l-4 border-sky-500 rounded-r-xl px-3 py-1.5 text-xs animate-fade-in-up"
+    >
+      <div class="flex items-center gap-2 min-w-0">
+        <Pencil class="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 flex-shrink-0" />
+        <span class="font-bold text-slate-800 dark:text-white flex-shrink-0">Editando mensaje</span>
+        <span class="truncate text-slate-500 dark:text-slate-400 italic max-w-xs">{{ chatStore.editingMessage.content }}</span>
+      </div>
+      <button
+        @click="cancelEditing"
+        class="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg transition-colors ml-2 cursor-pointer"
+        title="Cancelar edición (Esc)"
+      >
+        <X class="w-3.5 h-3.5" />
+      </button>
+    </div>
+
     <!-- Previsualización de archivos pendientes de envío -->
     <div v-if="pendingFiles.length > 0" class="flex flex-wrap gap-2 mb-3">
       <div 
@@ -59,7 +78,8 @@
       class="flex items-end gap-1.5 sm:gap-2 bg-slate-50 dark:bg-[#070e1b] border border-slate-200 dark:border-slate-800 rounded-2xl p-1.5 sm:p-2 focus-within:ring-2 focus-within:ring-amber-500/30 focus-within:border-amber-500 transition-all duration-200 shadow-inner"
     >
       <!-- Botón de Adjuntar Archivo -->
-      <button 
+      <button
+        v-if="!chatStore.editingMessage"
         @click="triggerFileInput"
         type="button"
         class="p-2.5 sm:p-2 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors flex-shrink-0 cursor-pointer"
@@ -126,9 +146,10 @@
         :class="canSend 
           ? 'bg-amber-600 hover:bg-amber-500 text-white font-bold shadow-md shadow-amber-500/25 active:scale-95' 
           : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'"
-        title="Enviar mensaje (Enter)"
+        :title="chatStore.editingMessage ? 'Guardar cambios (Enter)' : 'Enviar mensaje (Enter)'"
       >
-        <Send class="w-4 h-4 sm:w-4 sm:h-4" />
+        <Check v-if="chatStore.editingMessage" class="w-5 h-5 stroke-[3]" />
+        <Send v-else class="w-4 h-4 sm:w-4 sm:h-4" />
       </button>
     </div>
 
@@ -147,13 +168,15 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue';
-import { 
-  Paperclip, 
-  Send, 
-  X, 
-  Smile, 
-  Reply 
+import { ref, computed, nextTick, watch } from 'vue';
+import {
+  Paperclip,
+  Send,
+  X,
+  Smile,
+  Reply,
+  Pencil,
+  Check
 } from 'lucide-vue-next';
 import { useChatStore } from '@/stores/chat';
 import { useAuthStore } from '@/stores/auth';
@@ -237,14 +260,55 @@ function onInput() {
   chatStore.emitTyping();
 }
 
+// Al empezar a editar: cargar el texto del mensaje en el cuadro y enfocar
+let draftBeforeEdit = '';
+watch(() => chatStore.editingMessage, (msg, previous) => {
+  if (msg) {
+    if (!previous) draftBeforeEdit = text.value;
+    text.value = msg.content;
+    nextTick(() => {
+      adjustHeight();
+      const el = textareaRef.value;
+      el?.focus();
+      el?.setSelectionRange(el.value.length, el.value.length);
+    });
+  } else if (previous) {
+    text.value = draftBeforeEdit;
+    draftBeforeEdit = '';
+    nextTick(adjustHeight);
+  }
+});
+
+function cancelEditing() {
+  chatStore.cancelEdit();
+}
+
 function handleKeyDown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     submit();
+    return;
+  }
+  if (e.key === 'Escape' && chatStore.editingMessage) {
+    e.preventDefault();
+    cancelEditing();
+    return;
+  }
+  // Flecha arriba con el cuadro vacío: editar tu último mensaje (como WhatsApp Web)
+  if (e.key === 'ArrowUp' && !text.value && pendingFiles.value.length === 0) {
+    chatStore.editLastOwnMessage();
   }
 }
 
 async function submit() {
+  if (chatStore.editingMessage) {
+    const newText = text.value;
+    draftBeforeEdit = '';
+    text.value = '';
+    await chatStore.saveEdit(newText);
+    nextTick(adjustHeight);
+    return;
+  }
   if (!canSend.value) return;
 
   const contentToSend = text.value;

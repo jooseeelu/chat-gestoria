@@ -23,6 +23,9 @@ router.beforeEach((to, from, next) => {
   const authStore = useAuthStore();
   if (to.name !== 'login' && !authStore.isAuthenticated) {
     next({ name: 'login' });
+  } else if (to.name === 'login' && authStore.isAuthenticated) {
+    // Con sesión iniciada, "atrás" o el gesto de deslizar nunca deben volver al login
+    next({ name: 'chat', replace: true });
   } else {
     next();
   }

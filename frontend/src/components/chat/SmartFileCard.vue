@@ -1,7 +1,10 @@
 <template>
-  <div 
+  <div
     class="flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 group"
-    :class="cardStyle"
+    :class="[cardStyle, file.url && !file.failed ? 'cursor-pointer active:scale-[0.99]' : '']"
+    role="button"
+    :title="canPreview ? 'Abrir vista previa' : 'Descargar'"
+    @click="openOrDownload"
   >
     <!-- Miniatura o Icono según tipo -->
     <div class="relative flex-shrink-0 w-11 h-11 rounded-lg flex items-center justify-center overflow-hidden"
@@ -10,8 +13,8 @@
         <img 
           :src="file.url" 
           :alt="file.filename" 
-          class="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform duration-300"
-          @click="openPreview"
+          class="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+          draggable="false"
         />
       </template>
       <template v-else-if="file.file_type === 'pdf'">
@@ -54,9 +57,9 @@
 
     <!-- Acciones Rápidas (Descarga / Preview) -->
     <div class="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-      <button 
+      <button
         v-if="canPreview"
-        @click="openPreview"
+        @click.stop="openPreview"
         class="p-1.5 rounded-lg text-slate-500 hover:text-brand-500 hover:bg-slate-200/60 dark:hover:bg-slate-800/80 transition-colors"
         title="Previsualizar documento"
       >
@@ -68,6 +71,7 @@
         :download="file.filename"
         target="_blank"
         rel="noopener noreferrer"
+        @click.stop
         class="p-1.5 rounded-lg text-slate-500 hover:text-emerald-500 hover:bg-slate-200/60 dark:hover:bg-slate-800/80 transition-colors"
         title="Descargar archivo"
       >
@@ -123,5 +127,21 @@ const iconContainerStyle = computed(() => {
 
 function openPreview() {
   docStore.setPreviewFile(props.file);
+}
+
+// Tocar la tarjeta entera: vista previa si se puede; si no, descargar (como en WhatsApp)
+function openOrDownload() {
+  if (!props.file.url || props.file.failed || props.file.pending) return;
+  if (canPreview.value) {
+    openPreview();
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = props.file.url;
+  a.download = props.file.filename || '';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 </script>

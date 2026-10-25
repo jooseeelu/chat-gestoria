@@ -53,8 +53,9 @@ import { useAuthStore } from '@/stores/auth';
 const router = useRouter();
 const authStore = useAuthStore();
 
-function handleConfirm() {
-  authStore.confirmLogout();
-  router.push('/login');
+async function handleConfirm() {
+  // Esperar a que la sesión esté cerrada: con sesión abierta el router no deja ir al login
+  await authStore.confirmLogout();
+  router.replace('/login');
 }
 </script>

@@ -34,9 +34,10 @@ self.addEventListener('push', (event) => {
   }
 
   event.waitUntil((async () => {
-    // Si ya tienes el chat delante, no molestar: la app ya avisa con sonido
+    // Si ya tienes el chat en pantalla, no molestar: la app ya avisa con sonido.
+    // (El servidor tampoco manda push a dispositivos con la app abierta; esto es la 2ª capa)
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    if (windows.some((w) => w.focused && w.visibilityState === 'visible')) return;
+    if (windows.some((w) => w.visibilityState === 'visible')) return;
 
     if (self.navigator.setAppBadge) {
       self.navigator.setAppBadge().catch(() => {});

@@ -100,7 +100,7 @@ async function handleLogin() {
   try {
     const res = await authStore.login(email.value, password.value);
     if (res.success) {
-      router.push('/');
+      router.replace('/');
     } else {
       errorMessage.value = res.error || 'Credenciales incorrectas';
     }

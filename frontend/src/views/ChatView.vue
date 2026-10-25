@@ -1,5 +1,10 @@
 <template>
-  <div class="flex h-full w-full overflow-hidden bg-slate-50 dark:bg-[#0b1329] text-slate-800 dark:text-slate-100 transition-colors duration-200">
+  <div
+    class="flex h-full w-full overflow-hidden bg-slate-50 dark:bg-[#0b1329] text-slate-800 dark:text-slate-100 transition-colors duration-200"
+    @touchstart.passive="onEdgeTouchStart"
+    @touchmove.passive="onEdgeTouchMove"
+    @touchend.passive="onEdgeTouchEnd"
+  >
     
     <!-- Sidebar de Canales y Equipo (Desktop) -->
     <div class="hidden lg:block h-full">
@@ -23,7 +28,11 @@
           class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity"
           @click="isMobileSidebarOpen = false"
         ></div>
-        <div class="relative z-10 w-80 max-w-[85vw] h-full shadow-2xl pt-safe bg-white dark:bg-[#0b1329]">
+        <div
+          class="relative z-10 w-80 max-w-[85vw] h-full shadow-2xl pt-safe bg-white dark:bg-[#0b1329]"
+          @touchstart.passive="onDrawerTouchStart"
+          @touchend.passive="onDrawerTouchEnd"
+        >
           <SidebarChannels @close-sidebar="isMobileSidebarOpen = false" />
         </div>
       </div>
@@ -31,8 +40,11 @@
 
     <!-- Área Principal de Chat -->
     <main class="flex-1 flex flex-col h-full min-w-0 relative">
+      <!-- Barra de selección (tapa la cabecera mientras hay mensajes seleccionados) -->
+      <SelectionBar v-if="chatStore.selectionMode" />
+
       <!-- Barra Superior -->
-      <AppHeader 
+      <AppHeader
         @open-command="openCommandPalette"
         @toggle-sidebar="isMobileSidebarOpen = !isMobileSidebarOpen"
       />
@@ -42,6 +54,12 @@
 
       <!-- Bóveda de Documentos (Slide-over panel retráctil) -->
       <DocumentVaultDrawer />
+
+      <!-- Papelera de mensajes -->
+      <TrashDrawer />
+
+      <!-- Elegir canal para reenviar -->
+      <ForwardModal />
 
       <!-- Visor de Archivos (Lightbox Modal) -->
       <FileLightbox />
@@ -103,16 +121,77 @@ import FileLightbox from '@/components/chat/FileLightbox.vue';
 import CommandPalette from '@/components/command/CommandPalette.vue';
 import ChangePasswordModal from '@/components/ui/ChangePasswordModal.vue';
 import LogoutConfirmModal from '@/components/ui/LogoutConfirmModal.vue';
+import SelectionBar from '@/components/chat/SelectionBar.vue';
+import ForwardModal from '@/components/chat/ForwardModal.vue';
+import TrashDrawer from '@/components/layout/TrashDrawer.vue';
 import { useChatStore } from '@/stores/chat';
 import { useAuthStore } from '@/stores/auth';
+import { useDocumentStore } from '@/stores/documents';
+import { useBackToClose } from '@/utils/backStack';
 
 const chatStore = useChatStore();
 const authStore = useAuthStore();
+const docStore = useDocumentStore();
 const router = useRouter();
 const route = useRoute();
 const pwaStore = usePwaStore();
 const commandPaletteRef = ref(null);
 const isMobileSidebarOpen = ref(false);
+
+// "Atrás" (gesto o botón) cierra lo que esté abierto en vez de salir del chat
+useBackToClose(() => isMobileSidebarOpen.value, () => { isMobileSidebarOpen.value = false; });
+useBackToClose(() => !!docStore.activePreviewFile, () => docStore.closePreview());
+useBackToClose(() => docStore.isVaultOpen, () => docStore.closeVault());
+useBackToClose(() => chatStore.isTrashOpen, () => chatStore.closeTrash());
+useBackToClose(() => chatStore.selectionMode, () => chatStore.clearSelection());
+useBackToClose(() => chatStore.forwardingIds.length > 0, () => chatStore.cancelForward());
+useBackToClose(() => authStore.isSettingsOpen, () => authStore.closeSettings());
+
+// ---------- Deslizar desde el borde izquierdo = abrir el menú (como WhatsApp/Telegram) ----------
+const EDGE_ZONE_PX = 28;
+const OPEN_DISTANCE_PX = 60;
+let edgeStart = null;
+
+function onEdgeTouchStart(e) {
+  const t = e.touches[0];
+  edgeStart = !isMobileSidebarOpen.value && window.innerWidth < 1024 && t.clientX <= EDGE_ZONE_PX
+    ? { x: t.clientX, y: t.clientY }
+    : null;
+}
+
+function onEdgeTouchMove(e) {
+  if (!edgeStart) return;
+  const t = e.touches[0];
+  const dx = t.clientX - edgeStart.x;
+  const dy = Math.abs(t.clientY - edgeStart.y);
+  if (dy > 40 && dy > dx) {
+    edgeStart = null;
+  } else if (dx > OPEN_DISTANCE_PX) {
+    edgeStart = null;
+    isMobileSidebarOpen.value = true;
+  }
+}
+
+function onEdgeTouchEnd() {
+  edgeStart = null;
+}
+
+// Deslizar a la izquierda sobre el menú abierto = cerrarlo
+let drawerStartX = null;
+function onDrawerTouchStart(e) {
+  drawerStartX = e.touches[0].clientX;
+}
+function onDrawerTouchEnd(e) {
+  if (drawerStartX === null) return;
+  const dx = e.changedTouches[0].clientX - drawerStartX;
+  drawerStartX = null;
+  if (dx < -OPEN_DISTANCE_PX) isMobileSidebarOpen.value = false;
+}
+
+// Esc sale del modo selección
+function onKeydown(e) {
+  if (e.key === 'Escape' && chatStore.selectionMode) chatStore.clearSelection();
+}
 
 function openCommandPalette() {
   commandPaletteRef.value?.open();
@@ -151,6 +230,7 @@ onMounted(async () => {
   chatStore.subscribeRealtime();
   chatStore.startPolling();
   navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage);
+  window.addEventListener('keydown', onKeydown);
   pwaStore.syncPush();
 });
 
@@ -158,5 +238,6 @@ onUnmounted(() => {
   chatStore.stopPolling();
   chatStore.unsubscribeRealtime();
   navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage);
+  window.removeEventListener('keydown', onKeydown);
 });
 </script>

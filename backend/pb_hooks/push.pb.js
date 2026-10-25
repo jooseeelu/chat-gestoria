@@ -38,8 +38,12 @@ onRecordAfterCreateRequest((e) => {
 
   try {
     const senderId = record.getString("sender");
+    // Solo a dispositivos que NO tengan la app abierta ahora mismo (presencia en los últimos 45 s)
+    const activeCutoff = new Date(Date.now() - 45 * 1000).toISOString().replace("T", " ");
     const subs = $app.dao().findRecordsByFilter(
-      "push_subscriptions", "user != {:sender}", "", 500, 0, { sender: senderId }
+      "push_subscriptions",
+      "user != {:sender} && (active_at = '' || active_at < {:cutoff})",
+      "", 500, 0, { sender: senderId, cutoff: activeCutoff }
     );
     if (!subs || subs.length === 0) return;
 

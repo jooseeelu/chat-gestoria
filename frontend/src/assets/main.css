@@ -29,6 +29,41 @@
   .pt-safe-4 {
     padding-top: max(1rem, env(safe-area-inset-top));
   }
+
+  /* Mensajes: el scroll vertical lo hace el navegador; el deslizamiento horizontal
+     (responder) y mantener pulsado (seleccionar) los gestiona la app */
+  .msg-bubble {
+    touch-action: pan-y;
+  }
+
+  /* En PC el texto de los mensajes se puede seleccionar con el ratón */
+  .msg-text {
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: text;
+  }
+
+  /* En pantallas táctiles, mantener pulsado = seleccionar mensaje (como WhatsApp):
+     sin la selección de texto ni el menú nativo de iOS encima */
+  @media (hover: none) and (pointer: coarse) {
+    .msg-bubble,
+    .msg-bubble .msg-text {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      cursor: default;
+    }
+  }
+
+  /* Resaltado al saltar a un mensaje citado */
+  .msg-flash {
+    animation: msg-flash 1.4s ease;
+  }
+
+  @keyframes msg-flash {
+    0%, 60% { background-color: rgba(212, 175, 55, 0.28); }
+    100% { background-color: transparent; }
+  }
   
   /* Custom sleek scrollbar con toques dorados sutiles */
   ::-webkit-scrollbar {

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { pb, mapUser, initialsAvatar, fileToken, protectedFileUrl } from '@/api/pocketbase';
 import { useAuthStore } from './auth';
+import { usePwaStore } from './pwa';
 import { detectFileType } from '@/utils/fileIcons';
 import { playChimeSound } from '@/utils/formatters';
 
@@ -78,6 +79,7 @@ export const useChatStore = defineStore('chat', () => {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       resetUnread(activeChannelId.value);
+      markChannelRead(activeChannelId.value);
       try { navigator.clearAppBadge?.(); } catch (_) {}
     }
   });
@@ -149,7 +151,11 @@ export const useChatStore = defineStore('chat', () => {
       created: record.created,
       attachments,
       reactions: record.reactions || {},
-      reply_to: mapReply(record)
+      reply_to: mapReply(record),
+      edited_at: record.edited_at || '',
+      forwarded: !!record.forwarded,
+      read_by: record.read_by || [],
+      deleted_at: record.deleted_at || ''
     };
   }
 
@@ -187,7 +193,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       // Los ÚLTIMOS mensajes (orden descendente) y luego se invierten
       const res = await pb.collection('messages').getList(1, PAGE_SIZE, {
-        filter: pb.filter('channel = {:ch} && type != "system"', { ch: channelId }),
+        filter: pb.filter('channel = {:ch} && type != "system" && deleted != true', { ch: channelId }),
         sort: '-created',
         expand: MESSAGE_EXPAND
       });
@@ -207,6 +213,7 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       mergeServerMessages(channelId, items.map(r => mapMessage(r, attMap[r.id] || [])));
+      markChannelRead(channelId);
     } catch (e) {
       console.warn('Error cargando mensajes de PocketBase:', e.message);
     }
@@ -238,6 +245,8 @@ export const useChatStore = defineStore('chat', () => {
     inChatSearch.value = '';
     isSearchOpen.value = false;
     isTyping.value = false;
+    clearSelection();
+    cancelEdit();
     resetUnread(channelId);
     fetchMessages(channelId);
   }
@@ -396,23 +405,290 @@ export const useChatStore = defineStore('chat', () => {
     messagesByChannel.value[channelId] = list.filter(m => m.id !== messageId);
   }
 
-  async function deleteMessage(messageId) {
-    const channelId = activeChannelId.value;
-    const msg = rawMessages.value.find(m => m.id === messageId);
-    removeLocalMessage(channelId, messageId);
-    if (messageId.startsWith('tmp_')) return;
+  function canModify(msg) {
+    return msg?.sender?.id === myId() || authStore.currentUser?.role === 'admin';
+  }
 
+  // ---------- Papelera (borrado reversible) ----------
+
+  /**
+   * Mandar mensajes a la papelera. Se pueden restaurar durante 30 días;
+   * el aviso inferior permite deshacerlo al momento.
+   */
+  async function deleteMessages(messageIds) {
+    const channelId = activeChannelId.value;
+    const targets = rawMessages.value.filter(m => messageIds.includes(m.id) && canModify(m));
+    if (targets.length === 0) return;
+
+    const now = new Date().toISOString();
+    const moved = [];
+    for (const msg of targets) {
+      removeLocalMessage(channelId, msg.id);
+      if (msg.id.startsWith('tmp_')) continue;
+      try {
+        await pb.collection('messages').update(msg.id, { deleted: true, deleted_at: now, deleted_by: myId() });
+        moved.push(msg.id);
+      } catch (e) {
+        console.warn('Error enviando a la papelera:', e.message);
+      }
+    }
+    clearSelection();
+    if (moved.length < targets.length) fetchMessages(channelId);
+
+    if (moved.length > 0) {
+      usePwaStore().showToast(
+        moved.length === 1 ? 'Mensaje movido a la papelera' : `${moved.length} mensajes movidos a la papelera`,
+        'info',
+        6000,
+        { label: 'Deshacer', run: () => restoreMessages(moved) }
+      );
+    }
+  }
+
+  function deleteMessage(messageId) {
+    return deleteMessages([messageId]);
+  }
+
+  async function restoreMessages(messageIds) {
+    const channelsToReload = new Set();
+    for (const id of messageIds) {
+      try {
+        const record = await pb.collection('messages').update(id, { deleted: false, deleted_at: '', deleted_by: '' });
+        channelsToReload.add(record.channel);
+      } catch (e) {
+        console.warn('Error restaurando mensaje:', e.message);
+      }
+    }
+    trashItems.value = trashItems.value.filter(m => !messageIds.includes(m.id));
+    channelsToReload.forEach(ch => fetchMessages(ch));
+  }
+
+  const isTrashOpen = ref(false);
+  const trashItems = ref([]);
+  const trashLoading = ref(false);
+
+  async function fetchTrash() {
+    trashLoading.value = true;
     try {
-      // Los adjuntos no se borran en cascada: eliminarlos primero
-      for (const att of msg?.attachments || []) {
-        if (att.id && !att.failed && !att.pending) {
-          await pb.collection('attachments').delete(att.id).catch(() => {});
+      const records = await pb.collection('messages').getFullList({
+        filter: 'deleted = true',
+        sort: '-deleted_at',
+        expand: 'sender'
+      });
+      const ids = records.map(r => r.id);
+      const attMap = {};
+      if (ids.length > 0) {
+        const atts = await pb.collection('attachments').getFullList({
+          filter: ids.map(id => pb.filter('message = {:id}', { id })).join(' || ')
+        });
+        for (const att of atts) {
+          if (!attMap[att.message]) attMap[att.message] = [];
+          attMap[att.message].push(mapAttachment(att));
         }
       }
-      await pb.collection('messages').delete(messageId);
+      trashItems.value = records.map(r => ({
+        ...mapMessage(r, attMap[r.id] || []),
+        channelName: channels.value.find(c => c.id === r.channel)?.name || ''
+      }));
     } catch (e) {
-      console.warn('Error eliminando mensaje en PocketBase:', e.message);
-      fetchMessages(channelId);
+      console.warn('Error cargando la papelera:', e.message);
+    } finally {
+      trashLoading.value = false;
+    }
+  }
+
+  function openTrash() {
+    isTrashOpen.value = true;
+    fetchTrash();
+  }
+
+  function closeTrash() {
+    isTrashOpen.value = false;
+  }
+
+  // Borrado definitivo (con sus adjuntos, que no se borran en cascada)
+  async function purgeMessages(messageIds) {
+    for (const id of messageIds) {
+      const msg = trashItems.value.find(m => m.id === id);
+      try {
+        for (const att of msg?.attachments || []) {
+          await pb.collection('attachments').delete(att.id).catch(() => {});
+        }
+        await pb.collection('messages').delete(id);
+      } catch (e) {
+        console.warn('Error borrando definitivamente:', e.message);
+      }
+    }
+    trashItems.value = trashItems.value.filter(m => !messageIds.includes(m.id));
+  }
+
+  function emptyTrash() {
+    return purgeMessages(trashItems.value.map(m => m.id));
+  }
+
+  // ---------- Editar (como WhatsApp: solo tus mensajes y durante 15 minutos) ----------
+
+  const EDIT_WINDOW_MS = 15 * 60 * 1000;
+  const editingMessage = ref(null);
+
+  function canEdit(msg) {
+    return !!msg
+      && msg.sender?.id === myId()
+      && !msg.status
+      && !!msg.content
+      && Date.now() - new Date(msg.created).getTime() < EDIT_WINDOW_MS;
+  }
+
+  function startEdit(msg) {
+    if (!canEdit(msg)) return;
+    replyingTo.value = null;
+    clearSelection();
+    editingMessage.value = msg;
+  }
+
+  function cancelEdit() {
+    editingMessage.value = null;
+  }
+
+  async function saveEdit(newContent) {
+    const msg = editingMessage.value;
+    editingMessage.value = null;
+    const content = newContent.trim();
+    if (!msg || !content || content === msg.content) return;
+
+    const previous = { content: msg.content, edited_at: msg.edited_at };
+    const editedAt = new Date().toISOString();
+    msg.content = content;
+    msg.edited_at = editedAt;
+    try {
+      await pb.collection('messages').update(msg.id, { content, edited_at: editedAt });
+    } catch (e) {
+      console.warn('Error editando mensaje:', e.message);
+      Object.assign(msg, previous);
+      usePwaStore().showToast('No se pudo editar el mensaje', 'error');
+    }
+  }
+
+  // Flecha arriba con el cuadro vacío: editar tu último mensaje (como WhatsApp Web)
+  function editLastOwnMessage() {
+    const last = [...rawMessages.value].reverse().find(m => m.sender?.id === myId());
+    if (canEdit(last)) startEdit(last);
+  }
+
+  // ---------- Selección múltiple ----------
+
+  const selectedIds = ref([]);
+  const selectionMode = computed(() => selectedIds.value.length > 0);
+  const selectedMessages = computed(() => rawMessages.value.filter(m => selectedIds.value.includes(m.id)));
+
+  function toggleSelect(messageId) {
+    if (messageId.startsWith('tmp_')) return;
+    selectedIds.value = selectedIds.value.includes(messageId)
+      ? selectedIds.value.filter(id => id !== messageId)
+      : [...selectedIds.value, messageId];
+  }
+
+  function clearSelection() {
+    selectedIds.value = [];
+  }
+
+  async function copySelected() {
+    const text = selectedMessages.value
+      .map(m => (selectedMessages.value.length > 1 ? `[${m.sender.name}] ` : '') + (m.content || m.attachments.map(a => a.filename).join(', ')))
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      usePwaStore().showToast('Copiado', 'success', 1800);
+    } catch (_) {}
+    clearSelection();
+  }
+
+  // ---------- Reenviar ----------
+
+  const forwardingIds = ref([]);
+
+  function startForward(messageIds) {
+    forwardingIds.value = [...messageIds];
+  }
+
+  function cancelForward() {
+    forwardingIds.value = [];
+  }
+
+  /**
+   * Reenvía a otro canal: el texto tal cual y los adjuntos como copias nuevas
+   * (se descargan con el token y se vuelven a subir en el destino).
+   */
+  async function forwardMessages(targetChannelId) {
+    const ids = forwardingIds.value;
+    forwardingIds.value = [];
+    clearSelection();
+    const source = Object.values(messagesByChannel.value).flat().filter(m => ids.includes(m.id));
+    source.sort((a, b) => new Date(a.created) - new Date(b.created));
+
+    let ok = 0;
+    for (const msg of source) {
+      try {
+        const record = await pb.collection('messages').create({
+          channel: targetChannelId,
+          sender: myId(),
+          content: msg.content || '',
+          type: msg.attachments.length > 0 ? 'file' : 'text',
+          reactions: {},
+          forwarded: true
+        });
+        for (const att of msg.attachments) {
+          if (!att.fileRef) continue;
+          const blob = await (await fetch(att.url)).blob();
+          const formData = new FormData();
+          formData.append('channel', targetChannelId);
+          formData.append('message', record.id);
+          formData.append('uploader', myId());
+          formData.append('file', new File([blob], att.filename, { type: blob.type }));
+          formData.append('filename', att.filename);
+          formData.append('file_type', att.file_type);
+          formData.append('size', att.size || blob.size);
+          formData.append('mime_type', blob.type || 'application/octet-stream');
+          await pb.collection('attachments').create(formData);
+        }
+        ok++;
+      } catch (e) {
+        console.warn('Error reenviando mensaje:', e);
+      }
+    }
+
+    const target = channels.value.find(c => c.id === targetChannelId);
+    usePwaStore().showToast(
+      ok === source.length ? `Reenviado a ${target?.name || 'otro canal'}` : 'Algunos mensajes no se pudieron reenviar',
+      ok === source.length ? 'success' : 'error',
+      4000,
+      ok > 0 && targetChannelId !== activeChannelId.value
+        ? { label: 'Ir', run: () => setActiveChannel(targetChannelId) }
+        : null
+    );
+    if (targetChannelId === activeChannelId.value) fetchMessages(targetChannelId);
+  }
+
+  // ---------- Leído (doble check azul) ----------
+
+  let markingRead = false;
+  async function markChannelRead(channelId) {
+    if (markingRead || channelId !== activeChannelId.value || document.visibilityState !== 'visible') return;
+    const me = myId();
+    if (!me) return;
+    const unread = (messagesByChannel.value[channelId] || [])
+      .filter(m => !m.status && m.sender?.id !== me && !(m.read_by || []).includes(me))
+      .slice(-50);
+    if (unread.length === 0) return;
+
+    markingRead = true;
+    try {
+      for (const msg of unread) {
+        msg.read_by = [...(msg.read_by || []), me];
+        await pb.collection('messages').update(msg.id, { 'read_by+': me }).catch(() => {});
+      }
+    } finally {
+      markingRead = false;
     }
   }
 
@@ -459,9 +735,20 @@ export const useChatStore = defineStore('chat', () => {
     const existing = list.find(m => m.id === record.id);
 
     if (e.action === 'update') {
+      // Enviado a la papelera (lo vemos solo si es nuestro o somos admin)
+      if (record.deleted) {
+        removeLocalMessage(chId, record.id);
+        selectedIds.value = selectedIds.value.filter(id => id !== record.id);
+        return;
+      }
       if (existing) {
         existing.content = record.content;
         existing.reactions = record.reactions || {};
+        existing.edited_at = record.edited_at || '';
+        existing.read_by = record.read_by || [];
+      } else if (chId === activeChannelId.value) {
+        // Restaurado desde la papelera
+        fetchMessages(chId);
       }
       return;
     }
@@ -476,7 +763,19 @@ export const useChatStore = defineStore('chat', () => {
 
     if (chId === activeChannelId.value) isTyping.value = false;
     if (chId !== activeChannelId.value || document.visibilityState !== 'visible') incrementUnread(chId);
+    else markChannelRead(chId);
     if (soundEnabled.value) playChimeSound('receive');
+  }
+
+  // Avisos del servidor para mensajes que otros mandan a la papelera o restauran
+  function handleChatEvent(data) {
+    if (!data?.id) return;
+    if (data.type === 'hidden') {
+      removeLocalMessage(data.channel, data.id);
+      selectedIds.value = selectedIds.value.filter(id => id !== data.id);
+    } else if (data.type === 'restored' && messagesByChannel.value[data.channel]) {
+      fetchMessages(data.channel);
+    }
   }
 
   function handleAttachmentEvent(e) {
@@ -505,6 +804,7 @@ export const useChatStore = defineStore('chat', () => {
         pb.collection('messages').subscribe('*', handleMessageEvent, { expand: MESSAGE_EXPAND }),
         pb.collection('attachments').subscribe('*', handleAttachmentEvent),
         pb.realtime.subscribe('typing', handleTypingEvent),
+        pb.realtime.subscribe('chat_events', handleChatEvent),
         // Tras una reconexión puede haberse perdido algo: recargar
         pb.realtime.subscribe('PB_CONNECT', () => fetchMessages(activeChannelId.value))
       ]);
@@ -571,6 +871,37 @@ export const useChatStore = defineStore('chat', () => {
     openChannel,
     totalUnread,
     sendMessage,
-    deleteMessage
+    deleteMessage,
+    deleteMessages,
+    restoreMessages,
+    canModify,
+    // Papelera
+    isTrashOpen,
+    trashItems,
+    trashLoading,
+    openTrash,
+    closeTrash,
+    fetchTrash,
+    purgeMessages,
+    emptyTrash,
+    // Edición
+    editingMessage,
+    canEdit,
+    startEdit,
+    cancelEdit,
+    saveEdit,
+    editLastOwnMessage,
+    // Selección y reenvío
+    selectedIds,
+    selectionMode,
+    selectedMessages,
+    toggleSelect,
+    clearSelection,
+    copySelected,
+    forwardingIds,
+    startForward,
+    cancelForward,
+    forwardMessages,
+    markChannelRead
   };
 });
