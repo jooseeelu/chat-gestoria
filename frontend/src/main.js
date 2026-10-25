@@ -40,4 +40,6 @@ function hideSplash() {
   }, wait);
 }
 
-router.isReady().then(() => requestAnimationFrame(hideSplash));
+// setTimeout y no requestAnimationFrame: rAF se pausa si la app arranca en segundo plano
+// (p. ej. al abrirla desde una notificación en iPhone) y el splash no se iría nunca
+router.isReady().then(() => setTimeout(hideSplash, 0));

@@ -52,7 +52,10 @@
         background: #0b1329;
         overflow: hidden;
         transition: opacity 0.5s ease, visibility 0.5s ease;
+        /* Red de seguridad: si el JavaScript fallara, el splash se retira solo a los 8 s */
+        animation: sp-autohide 0.5s ease 8s forwards;
       }
+      @keyframes sp-autohide { to { opacity: 0; visibility: hidden; pointer-events: none; } }
       #splash.sp-hide { opacity: 0; visibility: hidden; }
       #splash .sp-glow {
         position: absolute;
@@ -161,7 +164,8 @@
       @keyframes sp-shine { 0% { background-position: 150% 0; } 60%, 100% { background-position: -100% 0; } }
       @keyframes sp-load { 0% { left: -45%; } 100% { left: 100%; } }
       @media (prefers-reduced-motion: reduce) {
-        #splash *, #splash { animation: none !important; transition: opacity 0.2s ease !important; }
+        #splash * { animation: none !important; }
+        #splash { transition: opacity 0.2s ease !important; }
         #splash .sp-ring, #splash .sp-bar { display: none; }
         #splash .sp-brand { opacity: 1; transform: none; }
       }
