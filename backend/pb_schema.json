@@ -51,7 +51,11 @@
         "unique": false,
         "options": {
           "maxSelect": 1,
-          "values": ["admin", "member", "intern"]
+          "values": [
+            "admin",
+            "member",
+            "intern"
+          ]
         }
       },
       {
@@ -78,7 +82,12 @@
         "unique": false,
         "options": {
           "maxSelect": 1,
-          "values": ["online", "busy", "away", "offline"]
+          "values": [
+            "online",
+            "busy",
+            "away",
+            "offline"
+          ]
         }
       },
       {
@@ -195,7 +204,11 @@
           "cascadeDelete": false,
           "minSelect": null,
           "maxSelect": null,
-          "displayFields": ["name", "email", "role"]
+          "displayFields": [
+            "name",
+            "email",
+            "role"
+          ]
         }
       },
       {
@@ -211,7 +224,9 @@
           "cascadeDelete": false,
           "minSelect": null,
           "maxSelect": 1,
-          "displayFields": ["name"]
+          "displayFields": [
+            "name"
+          ]
         }
       }
     ],
@@ -242,7 +257,9 @@
           "cascadeDelete": true,
           "minSelect": 1,
           "maxSelect": 1,
-          "displayFields": ["name"]
+          "displayFields": [
+            "name"
+          ]
         }
       },
       {
@@ -258,7 +275,10 @@
           "cascadeDelete": false,
           "minSelect": 1,
           "maxSelect": 1,
-          "displayFields": ["name", "avatar"]
+          "displayFields": [
+            "name",
+            "avatar"
+          ]
         }
       },
       {
@@ -285,7 +305,11 @@
         "unique": false,
         "options": {
           "maxSelect": 1,
-          "values": ["text", "file", "system"]
+          "values": [
+            "text",
+            "file",
+            "system"
+          ]
         }
       },
       {
@@ -323,7 +347,9 @@
           "cascadeDelete": false,
           "minSelect": null,
           "maxSelect": null,
-          "displayFields": ["name"]
+          "displayFields": [
+            "name"
+          ]
         }
       }
     ],
@@ -357,7 +383,9 @@
           "cascadeDelete": true,
           "minSelect": 1,
           "maxSelect": 1,
-          "displayFields": ["name"]
+          "displayFields": [
+            "name"
+          ]
         }
       },
       {
@@ -373,7 +401,9 @@
           "cascadeDelete": false,
           "minSelect": null,
           "maxSelect": 1,
-          "displayFields": ["id"]
+          "displayFields": [
+            "id"
+          ]
         }
       },
       {
@@ -389,7 +419,9 @@
           "cascadeDelete": false,
           "minSelect": 1,
           "maxSelect": 1,
-          "displayFields": ["name"]
+          "displayFields": [
+            "name"
+          ]
         }
       },
       {
@@ -401,23 +433,11 @@
         "presentable": false,
         "unique": false,
         "options": {
-          "mimeTypes": [
-            "application/pdf",
-            "application/vnd.ms-excel",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/zip",
-            "application/x-zip-compressed",
-            "application/x-rar-compressed",
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "image/gif",
-            "text/plain",
-            "text/csv"
+          "mimeTypes": [],
+          "thumbs": [
+            "100x100",
+            "400x300"
           ],
-          "thumbs": ["100x100", "400x300"],
           "maxSelect": 1,
           "maxSize": 104857600,
           "protected": false
@@ -447,7 +467,14 @@
         "unique": false,
         "options": {
           "maxSelect": 1,
-          "values": ["pdf", "spreadsheet", "image", "archive", "document", "other"]
+          "values": [
+            "pdf",
+            "spreadsheet",
+            "image",
+            "archive",
+            "document",
+            "other"
+          ]
         }
       },
       {

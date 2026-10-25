@@ -105,11 +105,16 @@ export function getFileExtension(filename) {
 /**
  * Reproductor de sonido sintetizado ultra-elegante con Web Audio API (cero dependencias externas)
  */
+// Un único AudioContext: el navegador limita cuántos se pueden crear y dejaba de sonar
+let sharedAudioContext = null;
+
 export function playChimeSound(type = 'send') {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
-    const ctx = new AudioContext();
+    if (!sharedAudioContext) sharedAudioContext = new AudioContext();
+    const ctx = sharedAudioContext;
+    if (ctx.state === 'suspended') ctx.resume();
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();

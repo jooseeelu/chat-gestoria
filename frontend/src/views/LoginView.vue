@@ -25,36 +25,6 @@
         </p>
       </div>
 
-      <!-- Selección Rápida de Perfil de Acceso -->
-      <div class="mb-5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/90">
-        <div class="text-[11px] font-bold text-amber-700 mb-2.5 text-center uppercase tracking-wider">
-          Selecciona tu cuenta autorizada
-        </div>
-
-        <div class="grid grid-cols-2 gap-2.5">
-          <button 
-            v-for="user in authStore.teamMembers"
-            :key="user.id"
-            @click="selectUser(user)"
-            type="button"
-            class="flex items-center gap-2.5 p-2.5 rounded-xl border transition-all text-left cursor-pointer"
-            :class="email === user.email 
-              ? 'bg-amber-50 border-amber-500 text-slate-900 ring-2 ring-amber-500/20 shadow-xs' 
-              : 'bg-white border-slate-200 text-slate-700 hover:border-amber-400 hover:shadow-xs'"
-          >
-            <img 
-              :src="user.avatar" 
-              :alt="user.name" 
-              class="w-9 h-9 rounded-lg object-cover ring-1 ring-slate-200 flex-shrink-0" 
-            />
-            <div class="min-w-0">
-              <span class="text-xs font-bold text-slate-900 block truncate">{{ user.name }}</span>
-              <span class="text-[10px] text-amber-700 font-semibold block truncate">IT & Sistemas</span>
-            </div>
-          </button>
-        </div>
-      </div>
-
       <!-- Formulario de Acceso -->
       <form @submit.prevent="handleLogin" class="space-y-4">
         <div v-if="errorMessage" class="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs text-center font-medium">
@@ -117,28 +87,28 @@ import { useAuthStore } from '@/stores/auth';
 const router = useRouter();
 const authStore = useAuthStore();
 
-const email = ref('joseluis@gestoriaemadrid.com');
+const email = ref('');
 const password = ref('');
 const errorMessage = ref('');
 const isLoading = ref(false);
-
-function selectUser(user) {
-  email.value = user.email;
-  password.value = '';
-  errorMessage.value = '';
-}
 
 async function handleLogin() {
   errorMessage.value = '';
   isLoading.value = true;
   
-  const res = await authStore.login(email.value, password.value);
-  isLoading.value = false;
-
-  if (res.success) {
-    router.push('/');
-  } else {
-    errorMessage.value = res.error || 'Credenciales incorrectas';
+  // finally: si algo lanza una excepción, el botón no se queda en "Accediendo..." para siempre
+  try {
+    const res = await authStore.login(email.value, password.value);
+    if (res.success) {
+      router.push('/');
+    } else {
+      errorMessage.value = res.error || 'Credenciales incorrectas';
+    }
+  } catch (e) {
+    console.warn('Error en login:', e);
+    errorMessage.value = 'Error inesperado al iniciar sesión';
+  } finally {
+    isLoading.value = false;
   }
 }
 </script>

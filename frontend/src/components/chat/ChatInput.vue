@@ -136,7 +136,7 @@
     <div class="flex items-center justify-between mt-1.5 px-1 text-xs sm:text-[11px] text-slate-500 dark:text-slate-400">
       <span class="flex items-center gap-1.5 truncate">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
-        <span class="truncate">Conectado con <strong class="text-slate-800 dark:text-white">{{ authStore.peerUser?.name }}</strong></span>
+        <span class="truncate">Conectado con <strong class="text-slate-800 dark:text-white">{{ authStore.peerUser?.name || 'el equipo' }}</strong></span>
       </span>
       <span class="hidden sm:inline-flex items-center gap-1 font-mono flex-shrink-0">
         <kbd class="kbd-badge">Enter</kbd> enviar • <kbd class="kbd-badge">`code`</kbd> • <kbd class="kbd-badge">**bold**</kbd>

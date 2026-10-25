@@ -1,200 +1,119 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { MOCK_USERS, STORAGE_KEY_USER, pb } from '@/api/pocketbase';
+import { pb, mapUser } from '@/api/pocketbase';
 
-const STORAGE_KEY_PASSWORDS = 'emadrid_passwords_v2';
-const STORAGE_KEY_PROFILES = 'emadrid_profiles_v2';
-
-function loadPasswords() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PASSWORDS);
-    if (raw) return JSON.parse(raw);
-  } catch (_) {}
-  return {
-    'user_joseluis_01': 'eMadrid2025!',
-    'user_johan_02': 'eMadrid2025!'
-  };
-}
-
-function savePasswords(passwords) {
-  try {
-    localStorage.setItem(STORAGE_KEY_PASSWORDS, JSON.stringify(passwords));
-  } catch (_) {}
-}
-
-function loadProfiles() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PROFILES);
-    if (raw) return JSON.parse(raw);
-  } catch (_) {}
-  return {};
-}
-
-function saveProfiles(profiles) {
-  try {
-    localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(profiles));
-  } catch (_) {}
-}
+// Claves de la versión antigua que lo guardaba todo en el navegador
+const LEGACY_KEYS = [
+  'emadrid_chat_messages_v5',
+  'emadrid_chat_messages_v3',
+  'emadrid_chat_messages_v2',
+  'emadrid_chat_current_user_v3',
+  'emadrid_passwords_v2'
+];
+const LEGACY_PROFILES_KEY = 'emadrid_profiles_v2';
+const LEGACY_MOCK_IDS = {
+  'joseluis@gestoriaemadrid.com': 'user_joseluis_01',
+  'johanfernix9@gmail.com': 'user_johan_02'
+};
 
 export const useAuthStore = defineStore('auth', () => {
-  const customProfiles = ref(loadProfiles());
-
-  // Mezclar usuarios base con fotos o datos personalizados
-  const initialMembers = MOCK_USERS.map(u => {
-    if (customProfiles.value[u.id]) {
-      return { ...u, ...customProfiles.value[u.id] };
-    }
-    return { ...u };
-  });
-
-  const teamMembers = ref(initialMembers);
-
-  const savedUserId = localStorage.getItem(STORAGE_KEY_USER);
-  const foundUser = savedUserId ? teamMembers.value.find(u => u.id === savedUserId) : null;
-
-  const currentUser = ref(foundUser ? { ...foundUser } : null);
+  // La sesión es la de PocketBase (persistida por el SDK); no hay login "local"
+  const currentUser = ref(pb.authStore.isValid ? mapUser(pb.authStore.model) : null);
+  const teamMembers = ref(currentUser.value ? [currentUser.value] : []);
   const isOnline = ref(true);
   const isSettingsOpen = ref(false);
+  const isLogoutModalOpen = ref(false);
 
-  const userPasswords = ref(loadPasswords());
+  const isAuthenticated = computed(() => !!currentUser.value && pb.authStore.isValid);
 
-  const isAuthenticated = computed(() => !!currentUser.value);
-
+  // Compañero a mostrar en la barra lateral: el primero que no sea yo
   const peerUser = computed(() => {
-    if (!currentUser.value) return teamMembers.value[1];
-    return teamMembers.value.find(u => u.id !== currentUser.value.id) || teamMembers.value[1];
+    if (!currentUser.value) return null;
+    return teamMembers.value.find(u => u.id !== currentUser.value.id) || null;
+  });
+
+  pb.authStore.onChange((token, model) => {
+    currentUser.value = token && model ? mapUser(model) : null;
   });
 
   async function login(email, password) {
     const cleanEmail = email.toLowerCase().trim();
-    
-    // 1. Intentar autenticar contra PocketBase
-    let pbUser = null;
     try {
-      if (pb) {
-        const authData = await pb.collection('users').authWithPassword(cleanEmail, password);
-        pbUser = authData?.record;
-      }
+      await pb.collection('users').authWithPassword(cleanEmail, password);
     } catch (e) {
-      console.warn('PocketBase auth falló o modo offline:', e.message);
-    }
-
-    // 2. Si autenticó en PocketBase o existe en el equipo
-    let user = teamMembers.value.find(u => u.email.toLowerCase() === cleanEmail);
-    if (!user && pbUser) {
-      user = {
-        id: pbUser.id,
-        name: pbUser.name || pbUser.username || cleanEmail.split('@')[0],
-        email: pbUser.email,
-        role: pbUser.role || 'member',
-        department: pbUser.department || 'IT & Sistemas',
-        position: pbUser.position || 'Miembro',
-        status: 'online',
-        avatar: pbUser.avatar ? pb.files.getUrl(pbUser, pbUser.avatar) : ''
-      };
-      teamMembers.value.push(user);
-    }
-
-    if (!user) {
-      return { success: false, error: 'Usuario no autorizado en el sistema' };
-    }
-
-    if (!pbUser) {
-      const expectedPassword = userPasswords.value[user.id] || 'eMadrid2025!';
-      const isPasswordValid = password === expectedPassword || 
-                             password === 'eMadrid2025!' || 
-                             password === 'eMadrid2025';
-
-      if (!isPasswordValid) {
-        return { success: false, error: 'Contraseña incorrecta' };
+      if (e?.status === 400) {
+        return { success: false, error: 'Email o contraseña incorrectos' };
       }
+      return { success: false, error: 'No se pudo conectar con el servidor' };
     }
-
-    currentUser.value = { ...user };
-    localStorage.setItem(STORAGE_KEY_USER, user.id);
-
+    setStatus('online');
     return { success: true };
   }
 
-  /**
-   * Actualizar perfil de usuario (Foto de perfil, nombre, etc.)
-   */
-  async function updateProfile({ name, avatar }) {
-    if (!currentUser.value) return { success: false, error: 'No hay sesión activa' };
-
-    const userId = currentUser.value.id;
-
-    if (name) currentUser.value.name = name;
-    if (avatar) currentUser.value.avatar = avatar;
-
-    // Actualizar en la lista del equipo
-    const memberIndex = teamMembers.value.findIndex(u => u.id === userId);
-    if (memberIndex > -1) {
-      teamMembers.value[memberIndex] = { ...currentUser.value };
-    }
-
-    // Persistir en localStorage
-    if (!customProfiles.value[userId]) {
-      customProfiles.value[userId] = {};
-    }
-    if (name) customProfiles.value[userId].name = name;
-    if (avatar) customProfiles.value[userId].avatar = avatar;
-    saveProfiles(customProfiles.value);
-
-    // Intentar sync en PocketBase
+  async function setStatus(status) {
+    if (!pb.authStore.isValid) return;
     try {
-      if (pb && pb.authStore.isValid) {
-        await pb.collection('users').update(userId, {
-          name: currentUser.value.name
-        });
-      }
+      await pb.collection('users').update(pb.authStore.model.id, { status });
     } catch (_) {}
-
-    return { success: true, message: 'Perfil actualizado con éxito' };
   }
 
   /**
-   * Cambiar contraseña del usuario actual
+   * Actualizar nombre y/o foto de perfil en PocketBase (visible para todo el equipo)
+   */
+  async function updateProfile({ name, avatarFile }) {
+    if (!currentUser.value) return { success: false, error: 'No hay sesión activa' };
+
+    const data = new FormData();
+    if (name) data.append('name', name.trim());
+    if (avatarFile) data.append('avatar', avatarFile);
+
+    try {
+      await pb.collection('users').update(currentUser.value.id, data);
+      // authStore.onChange actualiza currentUser con el registro nuevo
+      await pb.collection('users').authRefresh();
+      await fetchTeamMembers();
+      return { success: true, message: 'Perfil actualizado con éxito' };
+    } catch (e) {
+      console.warn('Error actualizando perfil:', e);
+      return { success: false, error: 'No se pudo guardar el perfil en el servidor' };
+    }
+  }
+
+  /**
+   * Cambiar contraseña del usuario actual (validada por PocketBase)
    */
   async function changePassword(currentPassword, newPassword, confirmPassword) {
     if (!currentUser.value) {
       return { success: false, error: 'No hay sesión activa' };
     }
-
-    const userId = currentUser.value.id;
-    const currentStored = userPasswords.value[userId] || 'eMadrid2025!';
-
-    if (currentPassword !== currentStored) {
-      return { success: false, error: 'La contraseña actual no es correcta' };
+    if (!newPassword || newPassword.length < 8) {
+      return { success: false, error: 'La nueva contraseña debe tener al menos 8 caracteres' };
     }
-
-    if (!newPassword || newPassword.length < 6) {
-      return { success: false, error: 'La nueva contraseña debe tener al menos 6 caracteres' };
-    }
-
     if (newPassword !== confirmPassword) {
       return { success: false, error: 'Las contraseñas no coinciden' };
     }
 
-    userPasswords.value[userId] = newPassword;
-    savePasswords(userPasswords.value);
-
+    const email = currentUser.value.email;
     try {
-      if (pb && pb.authStore.isValid) {
-        await pb.collection('users').update(userId, {
-          oldPassword: currentPassword,
-          password: newPassword,
-          passwordConfirm: confirmPassword
-        });
-      }
+      await pb.collection('users').update(currentUser.value.id, {
+        oldPassword: currentPassword,
+        password: newPassword,
+        passwordConfirm: confirmPassword
+      });
     } catch (e) {
-      console.warn('PocketBase sync opcional:', e.message);
+      if (e?.data?.data?.oldPassword) {
+        return { success: false, error: 'La contraseña actual no es correcta' };
+      }
+      return { success: false, error: 'No se pudo cambiar la contraseña' };
     }
+
+    // Cambiar la contraseña invalida el token: volver a entrar con la nueva
+    try {
+      await pb.collection('users').authWithPassword(email, newPassword);
+    } catch (_) {}
 
     return { success: true, message: '¡Contraseña actualizada correctamente!' };
   }
-
-  const isLogoutModalOpen = ref(false);
 
   function openSettings() {
     isSettingsOpen.value = true;
@@ -212,101 +131,66 @@ export const useAuthStore = defineStore('auth', () => {
     isLogoutModalOpen.value = false;
   }
 
-  function confirmLogout() {
+  async function confirmLogout() {
     isLogoutModalOpen.value = false;
+    await setStatus('offline');
     logout();
   }
 
   function logout() {
-    currentUser.value = null;
-    localStorage.removeItem(STORAGE_KEY_USER);
     isSettingsOpen.value = false;
     isLogoutModalOpen.value = false;
-    try {
-      pb.authStore.clear();
-    } catch (_) {}
+    pb.realtime.unsubscribe().catch(() => {});
+    pb.authStore.clear();
   }
 
   async function fetchTeamMembers() {
     try {
-      if (pb) {
-        const records = await pb.collection('users').getFullList({ sort: 'created' });
-        if (records && records.length > 0) {
-          teamMembers.value = records.map(r => {
-            let avatarUrl = '';
-            if (r.avatar) {
-              avatarUrl = pb.files.getUrl(r, r.avatar, { thumb: '160x160' });
-            } else if (customProfiles.value[r.id]?.avatar) {
-              avatarUrl = customProfiles.value[r.id].avatar;
-            } else if (r.name?.toLowerCase().includes('jose') || r.email?.toLowerCase().includes('jose')) {
-              avatarUrl = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80';
-            } else {
-              avatarUrl = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80';
-            }
-
-            return {
-              id: r.id,
-              name: r.name || r.username,
-              email: r.email,
-              role: r.role || 'member',
-              department: r.department || 'IT & Sistemas',
-              position: r.position || 'Desarrollador',
-              status: r.status || 'online',
-              avatar: avatarUrl
-            };
-          });
-
-          if (currentUser.value) {
-            const me = teamMembers.value.find(u => u.id === currentUser.value.id || u.email?.toLowerCase() === currentUser.value.email?.toLowerCase());
-            if (me) {
-              currentUser.value = { ...me };
-            }
-          }
-        }
-      }
+      const records = await pb.collection('users').getFullList({ sort: 'created' });
+      teamMembers.value = records.map(mapUser);
     } catch (e) {
       console.warn('Error cargando miembros de PocketBase:', e);
     }
   }
 
-  async function initAuth() {
-    if (pb) {
-      try {
-        if (!pb.authStore.isValid) {
-          // 1. Intentar sesión admin si es necesario para sincronizar
-          try {
-            await pb.admins.authWithPassword('tu-email@gestoriainnova.com', 'TuPasswordSegura');
-          } catch (_) {}
+  /**
+   * Si en este navegador quedó una foto guardada por la versión antigua
+   * (solo local), subirla una vez a PocketBase para que la vea el equipo.
+   */
+  async function migrateLegacyAvatar() {
+    try {
+      const raw = localStorage.getItem(LEGACY_PROFILES_KEY);
+      if (!raw) return;
+      const profiles = JSON.parse(raw);
+      const model = pb.authStore.model;
+      const legacy = profiles[model.id] || profiles[LEGACY_MOCK_IDS[model.email?.toLowerCase()]];
 
-          // 2. Autenticar usuario actual
-          const userEmail = currentUser.value?.email;
-          if (userEmail) {
-            try {
-              const authData = await pb.collection('users').authWithPassword(userEmail, 'eMadrid2025!');
-              if (authData?.record) {
-                currentUser.value.id = authData.record.id;
-              }
-            } catch (_) {
-              // Si la contraseña no estaba sincronizada con eMadrid2025!, resetearla usando admin
-              if (pb.authStore.isAdmin) {
-                const users = await pb.collection('users').getFullList({ filter: `email = "${userEmail}"` });
-                if (users.length > 0) {
-                  await pb.collection('users').update(users[0].id, {
-                    password: 'eMadrid2025!',
-                    passwordConfirm: 'eMadrid2025!'
-                  });
-                  const authData = await pb.collection('users').authWithPassword(userEmail, 'eMadrid2025!');
-                  if (authData?.record) {
-                    currentUser.value.id = authData.record.id;
-                  }
-                }
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('PocketBase auth init:', e);
+      if (!model.avatar && legacy?.avatar?.startsWith('data:image/')) {
+        const blob = await (await fetch(legacy.avatar)).blob();
+        const ext = blob.type.split('/')[1]?.replace('svg+xml', 'svg') || 'png';
+        await updateProfile({ avatarFile: new File([blob], `avatar.${ext}`, { type: blob.type }) });
       }
+      localStorage.removeItem(LEGACY_PROFILES_KEY);
+    } catch (e) {
+      console.warn('No se pudo migrar la foto antigua:', e);
+    }
+  }
+
+  async function initAuth() {
+    LEGACY_KEYS.forEach(k => localStorage.removeItem(k));
+
+    if (pb.authStore.isValid) {
+      try {
+        await pb.collection('users').authRefresh();
+      } catch (e) {
+        // Solo cerrar sesión si el servidor rechaza el token, no por un fallo de red
+        if ([401, 403, 404].includes(e?.status)) {
+          logout();
+          return;
+        }
+      }
+      await migrateLegacyAvatar();
+      setStatus('online');
     }
     await fetchTeamMembers();
   }
@@ -319,7 +203,6 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isSettingsOpen,
     isLogoutModalOpen,
-    userPasswords,
     login,
     initAuth,
     fetchTeamMembers,

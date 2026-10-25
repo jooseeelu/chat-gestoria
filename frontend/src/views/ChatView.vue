@@ -61,6 +61,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 import SidebarChannels from '@/components/layout/SidebarChannels.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
 import ChatWindow from '@/components/chat/ChatWindow.vue';
@@ -74,6 +75,7 @@ import { useAuthStore } from '@/stores/auth';
 
 const chatStore = useChatStore();
 const authStore = useAuthStore();
+const router = useRouter();
 const commandPaletteRef = ref(null);
 const isMobileSidebarOpen = ref(false);
 
@@ -83,6 +85,10 @@ function openCommandPalette() {
 
 onMounted(async () => {
   await authStore.initAuth();
+  if (!authStore.isAuthenticated) {
+    router.replace('/login');
+    return;
+  }
   await chatStore.fetchChannels();
   chatStore.subscribeRealtime();
   chatStore.startPolling();
@@ -90,5 +96,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   chatStore.stopPolling();
+  chatStore.unsubscribeRealtime();
 });
 </script>

@@ -44,6 +44,12 @@
       >
         {{ file.filename }}
       </p>
+      <p v-if="file.pending" class="text-[11px] font-medium text-slate-400 mt-0.5">
+        Subiendo…
+      </p>
+      <p v-if="file.failed"class="text-[11px] font-medium text-rose-600 dark:text-rose-400 mt-0.5">
+        No se pudo subir al servidor: solo lo ves tú
+      </p>
     </div>
 
     <!-- Acciones Rápidas (Descarga / Preview) -->

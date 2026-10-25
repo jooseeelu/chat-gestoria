@@ -67,13 +67,16 @@
     <div v-if="!isConsecutive" class="flex gap-2.5 sm:gap-3">
       <!-- Avatar -->
       <div class="relative flex-shrink-0 pt-0.5">
-        <img 
-          :src="message.sender.avatar || (message.sender.name?.toLowerCase().includes('jose') ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80' : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80')" 
+        <img
+          :src="message.sender.avatar || initialsAvatar(message.sender.name)"
           :alt="message.sender.name"
-          @error="$event.target.src = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80'"
+          @error="$event.target.src = initialsAvatar(message.sender.name)"
           class="w-9 h-9 sm:w-8 sm:h-8 rounded-xl object-cover ring-1 ring-slate-300 dark:ring-slate-700"
         />
-        <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"></span>
+        <span
+          v-if="message.sender.status === 'online'"
+          class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"
+        ></span>
       </div>
 
       <!-- Contenido Principal -->
@@ -89,6 +92,9 @@
             </span>
             <span class="text-xs sm:text-[11px] text-slate-400 dark:text-slate-500 font-mono">
               {{ formatTimeOnly(message.created) }}
+            </span>
+            <span v-if="statusLabel" class="text-[11px] font-medium" :class="message.status === 'failed' ? 'text-rose-500' : 'text-slate-400'">
+              {{ statusLabel }}
             </span>
           </div>
 
@@ -174,6 +180,9 @@
           <!-- Texto renderizado -->
           <div class="text-[15px] sm:text-sm text-slate-800 dark:text-slate-100 leading-relaxed break-words whitespace-pre-wrap font-normal flex-1">
             <span v-html="formattedContent"></span>
+            <span v-if="statusLabel" class="ml-2 text-[11px] font-medium" :class="message.status === 'failed' ? 'text-rose-500' : 'text-slate-400'">
+              {{ statusLabel }}
+            </span>
           </div>
 
           <!-- Botón de acciones para móvil en consecutivos (···) -->
@@ -233,6 +242,7 @@ import { formatTimeOnly } from '@/utils/formatters';
 import { useAuthStore } from '@/stores/auth';
 import { useChatStore } from '@/stores/chat';
 import SmartFileCard from './SmartFileCard.vue';
+import { initialsAvatar } from '@/api/pocketbase';
 
 const props = defineProps({
   message: {
@@ -254,13 +264,16 @@ const quickEmojis = ['👍', '🚀', '👀', '❤️', '🔥'];
 
 const isCurrentUser = computed(() => {
   const myId = authStore.currentUser?.id;
-  const myName = authStore.currentUser?.name?.toLowerCase();
-  const senderId = props.message.sender?.id;
-  const senderName = props.message.sender?.name?.toLowerCase();
+  return !!myId && myId === props.message.sender?.id;
+});
 
-  if (myId && senderId && myId === senderId) return true;
-  if (myName && senderName && (myName === senderName || myName.includes(senderName) || senderName.includes(myName))) return true;
-  return false;
+const statusLabel = computed(() => {
+  switch (props.message.status) {
+    case 'sending': return 'Enviando…';
+    case 'uploading': return 'Subiendo archivos…';
+    case 'failed': return 'No enviado: revisa la conexión';
+    default: return '';
+  }
 });
 
 const canDelete = computed(() => {
@@ -279,8 +292,13 @@ const formattedContent = computed(() => {
   if (!props.message.content) return '';
   let text = props.message.content;
 
-  // Escapar HTML básico
-  text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Escapar HTML (incluidas comillas: si no, una URL podía inyectar atributos en el <a>)
+  text = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
   // Inline code: `código`
   text = text.replace(/`([^`]+)`/g, '<code class="font-mono text-[13px] sm:text-[12px] bg-slate-200/80 dark:bg-slate-800 px-1.5 py-0.5 rounded text-amber-600 dark:text-amber-300 border border-slate-300/60 dark:border-slate-700/80">$1</code>');
@@ -289,7 +307,7 @@ const formattedContent = computed(() => {
   text = text.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-slate-900 dark:text-white">$1</strong>');
 
   // URLs automáticas
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
   text = text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-500 break-all">$1</a>');
 
   return text;

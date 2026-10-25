@@ -103,27 +103,6 @@
             <p class="text-[11px] text-slate-400 mt-0.5">Soporta PNG, JPG o WEBP</p>
           </div>
 
-          <!-- Presets rápidos de avatares estilo desarrollador -->
-          <div>
-            <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              O elige un avatar de desarrollo predefinido
-            </label>
-            <div class="grid grid-cols-4 gap-2">
-              <button 
-                v-for="(preset, idx) in devAvatarPresets"
-                :key="idx"
-                type="button"
-                @click="previewAvatar = preset"
-                class="p-1 rounded-xl border transition-all hover:scale-105"
-                :class="(previewAvatar || authStore.currentUser?.avatar) === preset 
-                  ? 'border-brand-500 ring-2 ring-brand-500/30' 
-                  : 'border-slate-200 dark:border-slate-700'"
-              >
-                <img :src="preset" class="w-full h-12 rounded-lg object-cover" />
-              </button>
-            </div>
-          </div>
-
           <!-- Nombre a mostrar -->
           <div>
             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
@@ -173,7 +152,7 @@
 
           <div>
             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-              Nueva Contraseña (mínimo 6 caracteres)
+              Nueva Contraseña (mínimo 8 caracteres)
             </label>
             <div class="relative">
               <input 
@@ -275,13 +254,8 @@ const loading = ref(false);
 const errorMsg = ref('');
 const successMsg = ref('');
 
-// Presets de avatares modernos listos para elegir
-const devAvatarPresets = [
-  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=160&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=160&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=160&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1628157582853-a796fa650a6a?w=160&auto=format&fit=crop&q=80'
-];
+// Archivo elegido; se sube a PocketBase al guardar para que lo vea todo el equipo
+const avatarFile = ref(null);
 
 watch(
   () => authStore.currentUser,
@@ -301,12 +275,8 @@ function triggerAvatarInput() {
 function handleAvatarFile(e) {
   const file = e.target.files?.[0];
   if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    previewAvatar.value = event.target.result;
-  };
-  reader.readAsDataURL(file);
+  avatarFile.value = file;
+  previewAvatar.value = URL.createObjectURL(file);
 }
 
 async function saveProfile() {
@@ -315,10 +285,11 @@ async function saveProfile() {
 
   const res = await authStore.updateProfile({
     name: displayName.value,
-    avatar: previewAvatar.value
+    avatarFile: avatarFile.value
   });
 
   if (res.success) {
+    avatarFile.value = null;
     successMsg.value = '¡Foto y perfil guardados correctamente!';
     setTimeout(() => {
       successMsg.value = '';

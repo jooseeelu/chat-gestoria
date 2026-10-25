@@ -1,30 +1,32 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { 
-  MOCK_CHANNELS, 
-  loadPersistentMessages, 
-  savePersistentMessages,
-  pb 
-} from '@/api/pocketbase';
+import { pb, mapUser, initialsAvatar } from '@/api/pocketbase';
 import { useAuthStore } from './auth';
 import { detectFileType } from '@/utils/fileIcons';
 import { playChimeSound } from '@/utils/formatters';
 
+const PAGE_SIZE = 200;
+const MESSAGE_EXPAND = 'sender,reply_to,reply_to.sender';
+const STORAGE_KEY_CHANNEL = 'emadrid_active_channel';
+
+/*
+ * PocketBase es la única fuente de verdad. En memoria solo viven los mensajes
+ * que aún se están enviando (status 'sending' / 'uploading') o que fallaron ('failed').
+ */
 export const useChatStore = defineStore('chat', () => {
   const authStore = useAuthStore();
 
-  const channels = ref([...MOCK_CHANNELS]);
-  const activeChannelId = ref('space_it');
-  const messagesByChannel = ref(loadPersistentMessages());
-  
+  const channels = ref([]);
+  const activeChannelId = ref(localStorage.getItem(STORAGE_KEY_CHANNEL) || '');
+  const messagesByChannel = ref({});
+
   const isUploading = ref(false);
   const uploadProgress = ref(0);
   const isTyping = ref(false);
-  const typingUser = ref('Johan');
+  const typingUser = ref('');
 
-  // Funcionalidades Senior UX
-  const replyingTo = ref(null); // Mensaje que se está respondiendo/citando
-  const inChatSearch = ref(''); // Búsqueda de mensajes dentro del canal activo
+  const replyingTo = ref(null);
+  const inChatSearch = ref('');
   const isSearchOpen = ref(false);
   const soundEnabled = ref(localStorage.getItem('emadrid_sound') !== 'false');
 
@@ -50,16 +52,149 @@ export const useChatStore = defineStore('chat', () => {
     });
   });
 
+  function myId() {
+    return pb.authStore.model?.id || authStore.currentUser?.id;
+  }
+
+  function listFor(channelId) {
+    if (!messagesByChannel.value[channelId]) {
+      messagesByChannel.value[channelId] = [];
+    }
+    return messagesByChannel.value[channelId];
+  }
+
+  // ---------- Mapeo de registros de PocketBase al formato de la UI ----------
+
+  function resolveSender(senderId, expandSender) {
+    if (expandSender) return mapUser(expandSender);
+    const member = authStore.teamMembers.find(u => u.id === senderId);
+    if (member) return member;
+    return { id: senderId, name: 'Usuario', role: 'member', avatar: initialsAvatar('?') };
+  }
+
+  function mapAttachment(att) {
+    return {
+      id: att.id,
+      message: att.message,
+      filename: att.filename,
+      file_type: att.file_type || detectFileType(att.filename, att.mime_type),
+      size: att.size,
+      url: pb.files.getUrl(att, att.file)
+    };
+  }
+
+  function mapReply(record) {
+    const parent = record.expand?.reply_to;
+    if (!parent) return null;
+    const parentSender = resolveSender(parent.sender, parent.expand?.sender);
+    return {
+      id: parent.id,
+      senderName: parentSender.name,
+      snippet: parent.content
+        ? (parent.content.length > 80 ? parent.content.slice(0, 80) + '…' : parent.content)
+        : 'Archivo adjunto'
+    };
+  }
+
+  function mapMessage(record, attachments = []) {
+    return {
+      id: record.id,
+      channel: record.channel,
+      sender: resolveSender(record.sender, record.expand?.sender),
+      content: record.content,
+      type: record.type || (attachments.length > 0 ? 'file' : 'text'),
+      created: record.created,
+      attachments,
+      reactions: record.reactions || {},
+      reply_to: mapReply(record)
+    };
+  }
+
+  // ---------- Carga ----------
+
+  async function fetchChannels() {
+    try {
+      const records = await pb.collection('channels').getFullList({ sort: 'created' });
+      channels.value = records.map(r => ({
+        id: r.id,
+        name: r.name,
+        department: r.department || r.name,
+        description: r.description || '',
+        icon: r.icon || 'Hash',
+        unread_count: 0
+      }));
+
+      if (records.length > 0 && !records.some(r => r.id === activeChannelId.value)) {
+        const itChannel = records.find(r => /\bit\b|sistemas/i.test(r.name));
+        activeChannelId.value = itChannel ? itChannel.id : records[0].id;
+      }
+    } catch (e) {
+      console.warn('Error cargando canales:', e.message);
+    }
+    if (activeChannelId.value) {
+      await fetchMessages(activeChannelId.value);
+    }
+  }
+
+  let lastFetchAt = 0;
+
+  async function fetchMessages(channelId = activeChannelId.value) {
+    if (!channelId) return;
+    lastFetchAt = Date.now();
+    try {
+      // Los ÚLTIMOS mensajes (orden descendente) y luego se invierten
+      const res = await pb.collection('messages').getList(1, PAGE_SIZE, {
+        filter: pb.filter('channel = {:ch} && type != "system"', { ch: channelId }),
+        sort: '-created',
+        expand: MESSAGE_EXPAND
+      });
+      const items = res.items.reverse();
+
+      const attMap = {};
+      if (items.length > 0) {
+        const atts = await pb.collection('attachments').getFullList({
+          filter: pb.filter('channel = {:ch} && created >= {:from}', { ch: channelId, from: items[0].created }),
+          sort: 'created'
+        });
+        for (const att of atts) {
+          if (!att.message) continue;
+          if (!attMap[att.message]) attMap[att.message] = [];
+          attMap[att.message].push(mapAttachment(att));
+        }
+      }
+
+      mergeServerMessages(channelId, items.map(r => mapMessage(r, attMap[r.id] || [])));
+    } catch (e) {
+      console.warn('Error cargando mensajes de PocketBase:', e.message);
+    }
+  }
+
+  function mergeServerMessages(channelId, serverMsgs) {
+    const local = messagesByChannel.value[channelId] || [];
+    const serverIds = new Set(serverMsgs.map(m => m.id));
+
+    const merged = serverMsgs.map(sm => {
+      const lm = local.find(m => m.id === sm.id);
+      if (!lm) return sm;
+      // Mientras se suben sus archivos, conservar la vista local con las previsualizaciones
+      if (lm.status === 'uploading') return lm;
+      // Mantener visibles los adjuntos que no se pudieron subir
+      const failed = (lm.attachments || []).filter(a => a.failed);
+      if (failed.length) sm.attachments = [...sm.attachments, ...failed];
+      return sm;
+    });
+
+    const pending = local.filter(m => m.status && !serverIds.has(m.id));
+    messagesByChannel.value[channelId] = [...merged, ...pending];
+  }
+
   function setActiveChannel(channelId) {
     activeChannelId.value = channelId;
+    localStorage.setItem(STORAGE_KEY_CHANNEL, channelId);
     replyingTo.value = null;
     inChatSearch.value = '';
     isSearchOpen.value = false;
-
-    if (!messagesByChannel.value[channelId]) {
-      messagesByChannel.value[channelId] = [];
-      savePersistentMessages(messagesByChannel.value);
-    }
+    isTyping.value = false;
     fetchMessages(channelId);
   }
 
@@ -76,449 +211,274 @@ export const useChatStore = defineStore('chat', () => {
     replyingTo.value = null;
   }
 
-  function readFileAsDataUrl(file) {
-    return new Promise((resolve) => {
-      if (file.size < 15 * 1024 * 1024) {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = () => resolve(URL.createObjectURL(file));
-        reader.readAsDataURL(file);
-      } else {
-        resolve(URL.createObjectURL(file));
-      }
-    });
-  }
+  // ---------- Envío ----------
 
-  /**
-   * Enviar mensaje con soporte de Cita/Respuesta y sonido elegante
-   */
   async function sendMessage(content, files = []) {
     if (!content.trim() && files.length === 0) return;
 
     const channelId = activeChannelId.value;
     const sender = authStore.currentUser;
+    const tempId = 'tmp_' + Date.now();
+    const reply = replyingTo.value;
 
-    const processedAttachments = [];
-
-    if (files.length > 0) {
-      isUploading.value = true;
-      uploadProgress.value = 25;
-      
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileType = detectFileType(file.name, file.type);
-        const dataUrl = await readFileAsDataUrl(file);
-
-        processedAttachments.push({
-          id: 'att_' + Date.now() + '_' + i,
-          filename: file.name,
-          file_type: fileType,
-          size: file.size,
-          url: dataUrl
-        });
-
-        uploadProgress.value = Math.min(95, Math.floor(((i + 1) / files.length) * 85) + 15);
-      }
-    }
-
-    const newMessage = {
-      id: 'msg_' + Date.now(),
+    const list = listFor(channelId);
+    list.push({
+      id: tempId,
       channel: channelId,
-      sender: {
-        id: sender.id,
-        name: sender.name,
-        role: sender.role,
-        position: sender.position,
-        avatar: sender.avatar
-      },
+      sender: { ...sender },
       content: content.trim(),
-      type: processedAttachments.length > 0 ? 'file' : 'text',
+      type: files.length > 0 ? 'file' : 'text',
       created: new Date().toISOString(),
-      attachments: processedAttachments,
-      reply_to: replyingTo.value ? {
-        id: replyingTo.value.id,
-        senderName: replyingTo.value.sender.name,
-        snippet: replyingTo.value.content ? (replyingTo.value.content.slice(0, 80) + '...') : 'Archivo adjunto'
+      // Previsualización local mientras sube (no se guarda en ningún sitio)
+      attachments: files.map((file, i) => ({
+        id: `${tempId}_${i}`,
+        filename: file.name,
+        file_type: detectFileType(file.name, file.type),
+        size: file.size,
+        url: URL.createObjectURL(file),
+        pending: true
+      })),
+      reactions: {},
+      reply_to: reply ? {
+        id: reply.id,
+        senderName: reply.sender.name,
+        snippet: reply.content ? reply.content.slice(0, 80) : 'Archivo adjunto'
       } : null,
-      reactions: {} // Ej: { "👍": ["user_joseluis_01"], "🚀": ["user_johan_02"] }
-    };
+      status: 'sending'
+    });
+    // Trabajar sobre el proxy reactivo para que la UI se entere de los cambios
+    const msg = list[list.length - 1];
 
-    if (!messagesByChannel.value[channelId]) {
-      messagesByChannel.value[channelId] = [];
-    }
-    messagesByChannel.value[channelId].push(newMessage);
-
-    savePersistentMessages(messagesByChannel.value);
-
-    // Limpiar respuesta activa
     replyingTo.value = null;
+    if (soundEnabled.value) playChimeSound('send');
 
-    // Reproducir feedback de audio suave
-    if (soundEnabled.value) {
-      playChimeSound('send');
-    }
-
-    if (files.length > 0) {
-      uploadProgress.value = 100;
-      setTimeout(() => {
-        isUploading.value = false;
-        uploadProgress.value = 0;
-      }, 400);
-    }
-
+    let record;
     try {
-      if (pb) {
-        if (!pb.authStore.isValid && authStore.currentUser?.email) {
-          try {
-            await pb.collection('users').authWithPassword(authStore.currentUser.email, 'eMadrid2025!');
-          } catch (_) {}
-        }
-        if (pb.authStore.isValid) {
-          const record = await pb.collection('messages').create({
-            channel: channelId,
-            sender: pb.authStore.model?.id || sender.id,
-            content: content.trim(),
-            type: newMessage.type,
-            reactions: {}
-          });
-          if (record && record.id) {
-            newMessage.id = record.id;
-
-            // Subir cada archivo a la colección de attachments de PocketBase
-            if (files && files.length > 0) {
-              for (let i = 0; i < files.length; i++) {
-                try {
-                  const file = files[i];
-                  const fileType = detectFileType(file.name, file.type);
-                  const formData = new FormData();
-                  formData.append('channel', channelId);
-                  formData.append('message', record.id);
-                  formData.append('uploader', pb.authStore.model?.id || sender.id);
-                  formData.append('file', file);
-                  formData.append('filename', file.name);
-                  formData.append('file_type', fileType);
-                  formData.append('size', file.size);
-                  formData.append('mime_type', file.type || 'application/octet-stream');
-
-                  const attRecord = await pb.collection('attachments').create(formData);
-                  if (attRecord && attRecord.file) {
-                    const realUrl = pb.files.getUrl(attRecord, attRecord.file);
-                    if (newMessage.attachments[i]) {
-                      newMessage.attachments[i].id = attRecord.id;
-                      newMessage.attachments[i].url = realUrl;
-                    }
-                  }
-                } catch (attErr) {
-                  console.warn('Error subiendo archivo a PocketBase:', attErr);
-                }
-              }
-            }
-
-            savePersistentMessages(messagesByChannel.value);
-          }
-        }
-      }
+      record = await pb.collection('messages').create({
+        channel: channelId,
+        sender: myId(),
+        content: content.trim(),
+        type: msg.type,
+        reactions: {},
+        reply_to: reply && !reply.id.startsWith('tmp_') ? reply.id : ''
+      });
     } catch (err) {
       console.warn('Error enviando mensaje a PocketBase:', err);
+      msg.status = 'failed';
+      return;
+    }
+
+    // Si el tiempo real o el polling ya lo trajeron, quedarse con la copia local
+    const current = listFor(channelId);
+    const dupIndex = current.findIndex(m => m.id === record.id && m !== msg);
+    if (dupIndex > -1) current.splice(dupIndex, 1);
+    msg.id = record.id;
+    msg.created = record.created;
+
+    if (files.length === 0) {
+      msg.status = undefined;
+      return;
+    }
+
+    msg.status = 'uploading';
+    isUploading.value = true;
+    uploadProgress.value = 10;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const local = msg.attachments[i];
+      try {
+        const formData = new FormData();
+        formData.append('channel', channelId);
+        formData.append('message', record.id);
+        formData.append('uploader', myId());
+        formData.append('file', file);
+        formData.append('filename', file.name);
+        formData.append('file_type', detectFileType(file.name, file.type));
+        formData.append('size', file.size);
+        formData.append('mime_type', file.type || 'application/octet-stream');
+
+        const attRecord = await pb.collection('attachments').create(formData);
+        URL.revokeObjectURL(local.url);
+        msg.attachments[i] = mapAttachment(attRecord);
+      } catch (attErr) {
+        console.warn('Error subiendo archivo a PocketBase:', attErr);
+        // El emisor tiene que saber que sus compañeros no lo van a recibir
+        local.pending = false;
+        local.failed = true;
+      }
+      uploadProgress.value = Math.round(((i + 1) / files.length) * 100);
+    }
+
+    msg.status = undefined;
+    setTimeout(() => {
+      isUploading.value = false;
+      uploadProgress.value = 0;
+    }, 400);
+  }
+
+  // ---------- Reacciones y borrado ----------
+
+  async function toggleReaction(messageId, emoji) {
+    const msg = rawMessages.value.find(m => m.id === messageId);
+    const me = myId();
+    if (!msg || !me || messageId.startsWith('tmp_')) return;
+
+    const previous = msg.reactions || {};
+    const next = JSON.parse(JSON.stringify(previous));
+    const users = next[emoji] || [];
+    next[emoji] = users.includes(me) ? users.filter(u => u !== me) : [...users, me];
+    if (next[emoji].length === 0) delete next[emoji];
+
+    msg.reactions = next;
+    try {
+      await pb.collection('messages').update(messageId, { reactions: next });
+    } catch (e) {
+      console.warn('Error guardando reacción:', e.message);
+      msg.reactions = previous;
     }
   }
 
-  /**
-   * Reacciones con Emojis (👍, 🚀, 👀, ❤️, 🔥, etc.)
-   */
-  function toggleReaction(messageId, emoji) {
-    const channelId = activeChannelId.value;
-    const msg = messagesByChannel.value[channelId]?.find(m => m.id === messageId);
-    if (!msg) return;
-
-    if (!msg.reactions) {
-      msg.reactions = {};
-    }
-
-    const currentUserId = authStore.currentUser?.id;
-    if (!currentUserId) return;
-
-    if (!msg.reactions[emoji]) {
-      msg.reactions[emoji] = [];
-    }
-
-    const userIndex = msg.reactions[emoji].indexOf(currentUserId);
-    if (userIndex > -1) {
-      // Quitar reacción
-      msg.reactions[emoji].splice(userIndex, 1);
-      if (msg.reactions[emoji].length === 0) {
-        delete msg.reactions[emoji];
-      }
-    } else {
-      // Añadir reacción
-      msg.reactions[emoji].push(currentUserId);
-    }
-
-    savePersistentMessages(messagesByChannel.value);
+  function removeLocalMessage(channelId, messageId) {
+    const list = messagesByChannel.value[channelId];
+    if (!list) return;
+    messagesByChannel.value[channelId] = list.filter(m => m.id !== messageId);
   }
 
   async function deleteMessage(messageId) {
     const channelId = activeChannelId.value;
-    if (messagesByChannel.value[channelId]) {
-      messagesByChannel.value[channelId] = messagesByChannel.value[channelId].filter(m => m.id !== messageId);
-      savePersistentMessages(messagesByChannel.value);
-    }
+    const msg = rawMessages.value.find(m => m.id === messageId);
+    removeLocalMessage(channelId, messageId);
+    if (messageId.startsWith('tmp_')) return;
 
     try {
-      if (pb) {
-        // Asegurar que si es ID de PocketBase se elimina permanentemente de la base de datos
-        await pb.collection('messages').delete(messageId);
+      // Los adjuntos no se borran en cascada: eliminarlos primero
+      for (const att of msg?.attachments || []) {
+        if (att.id && !att.failed && !att.pending) {
+          await pb.collection('attachments').delete(att.id).catch(() => {});
+        }
       }
+      await pb.collection('messages').delete(messageId);
     } catch (e) {
       console.warn('Error eliminando mensaje en PocketBase:', e.message);
+      fetchMessages(channelId);
     }
   }
 
-  function clearActiveChannel() {
-    const channelId = activeChannelId.value;
-    messagesByChannel.value[channelId] = [];
-    savePersistentMessages(messagesByChannel.value);
-  }
-
-  async function fetchChannels() {
-    try {
-      if (pb) {
-        const records = await pb.collection('channels').getFullList({
-          sort: 'created'
-        });
-        if (records && records.length > 0) {
-          channels.value = records.map(r => ({
-            id: r.id,
-            name: r.name,
-            department: r.department || r.name,
-            description: r.description || '',
-            icon: r.icon || 'Hash',
-            unread_count: 0
-          }));
-          // Si el canal activo no existe en la lista de PocketBase, seleccionar el de IT o el primero
-          if (!records.some(r => r.id === activeChannelId.value)) {
-            const itChannel = records.find(r => 
-              r.name.toLowerCase().includes('it') || 
-              r.name.toLowerCase().includes('sistemas')
-            );
-            activeChannelId.value = itChannel ? itChannel.id : records[0].id;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Usando canales locales predeterminados:', e.message);
-    }
-    await fetchMessages(activeChannelId.value);
-  }
-
-  function resolveSenderProfile(senderId, expandSender) {
-    const expandName = (expandSender?.name || expandSender?.username || '').toLowerCase();
-    const expandEmail = (expandSender?.email || '').toLowerCase();
-
-    // 1. Si PocketBase tiene un archivo de avatar subido, ¡USARLO SIEMPRE!
-    let pbAvatar = '';
-    if (expandSender?.avatar && pb) {
-      pbAvatar = pb.files.getUrl(expandSender, expandSender.avatar, { thumb: '160x160' });
-    }
-
-    // 2. Buscar en teamMembers por ID, email o nombre
-    const matched = authStore.teamMembers.find(u => {
-      if (u.id === senderId) return true;
-      if (expandEmail && u.email?.toLowerCase() === expandEmail) return true;
-      if (expandName) {
-        const uName = (u.name || '').toLowerCase();
-        if (uName.includes('jose') && expandName.includes('jose')) return true;
-        if (uName.includes('johan') && expandName.includes('johan')) return true;
-        if (uName === expandName) return true;
-      }
-      return false;
-    });
-
-    if (matched) {
-      return {
-        id: senderId,
-        name: expandSender?.name || matched.name,
-        avatar: pbAvatar || matched.avatar,
-        role: expandSender?.role || matched.role || 'member',
-        position: matched.position || 'IT & Sistemas'
-      };
-    }
-
-    // 3. Fallback solo si no hay ninguna foto real subida
-    const isJose = expandName.includes('jose') || expandEmail.includes('jose');
-    const isJohan = expandName.includes('johan') || expandEmail.includes('johan');
-
-    return {
-      id: senderId,
-      name: expandSender?.name || (isJose ? 'Jose Luis' : isJohan ? 'Johan' : 'Compañero'),
-      avatar: pbAvatar || (isJose 
-        ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80' 
-        : isJohan 
-        ? 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80' 
-        : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80'),
-      role: expandSender?.role || 'member',
-      position: 'Desarrollador'
-    };
-  }
-
-  async function fetchMessages(channelId = activeChannelId.value) {
-    try {
-      if (pb) {
-        const [messagesRes, attachmentsRes] = await Promise.all([
-          pb.collection('messages').getList(1, 100, {
-            filter: `channel = "${channelId}" && type != "system"`,
-            sort: 'created',
-            expand: 'sender'
-          }),
-          pb.collection('attachments').getFullList({
-            filter: `channel = "${channelId}"`,
-            sort: 'created'
-          }).catch(() => [])
-        ]);
-
-        // Mapear adjuntos por ID de mensaje
-        const attMap = {};
-        for (const att of (attachmentsRes || [])) {
-          if (att.message) {
-            if (!attMap[att.message]) attMap[att.message] = [];
-            attMap[att.message].push({
-              id: att.id,
-              filename: att.filename,
-              file_type: att.file_type || detectFileType(att.filename, att.mime_type),
-              size: att.size,
-              url: pb.files.getUrl(att, att.file)
-            });
-          }
-        }
-
-        if (messagesRes.items && messagesRes.items.length > 0) {
-          const currentList = messagesByChannel.value[channelId] || [];
-
-          messagesByChannel.value[channelId] = messagesRes.items.map(r => {
-            const senderUser = resolveSenderProfile(r.sender, r.expand?.sender);
-            
-            // Si el mensaje ya tenía adjuntos locales en memoria, preservarlos para que nunca se borren
-            const existingMsg = currentList.find(m => m.id === r.id);
-            const resolvedAttachments = (attMap[r.id] && attMap[r.id].length > 0) 
-              ? attMap[r.id] 
-              : (existingMsg?.attachments || []);
-
-            return {
-              id: r.id,
-              channel: r.channel,
-              sender: senderUser,
-              content: r.content,
-              type: r.type || (resolvedAttachments.length > 0 ? 'file' : 'text'),
-              created: r.created,
-              attachments: resolvedAttachments,
-              reactions: r.reactions || {}
-            };
-          });
-          savePersistentMessages(messagesByChannel.value);
-        }
-      }
-    } catch (e) {
-      console.warn('Error cargando mensajes de PocketBase:', e.message);
-    }
-  }
+  // ---------- "Escribiendo..." ----------
 
   let lastTypingSent = 0;
   async function emitTyping() {
-    if (!pb) return;
     const now = Date.now();
-    if (now - lastTypingSent < 2000) return;
+    if (now - lastTypingSent < 2500 || !activeChannelId.value) return;
     lastTypingSent = now;
-
     try {
-      const senderId = pb.authStore.model?.id || authStore.currentUser?.id;
-      if (!senderId) return;
-      await pb.collection('messages').create({
-        channel: activeChannelId.value,
-        sender: senderId,
-        content: '__TYPING__',
-        type: 'system',
-        reactions: {}
-      });
+      await pb.send('/api/typing', { method: 'POST', body: { channel: activeChannelId.value } });
     } catch (_) {}
   }
 
-  async function clearMyTyping() {}
+  function clearMyTyping() {
+    lastTypingSent = 0;
+  }
 
   let typingTimer = null;
-  async function subscribeRealtime() {
-    try {
-      if (pb) {
-        // Suscribirse a mensajes y eventos de escritura en tiempo real
-        await pb.collection('messages').subscribe('*', (e) => {
-          if (e.action === 'create') {
-            const record = e.record;
-            const chId = record.channel;
+  function handleTypingEvent(data) {
+    if (!data || data.userId === myId() || data.channel !== activeChannelId.value) return;
+    typingUser.value = data.name || 'Compañero';
+    isTyping.value = true;
+    if (typingTimer) clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => {
+      isTyping.value = false;
+    }, 3500);
+  }
 
-            // Detección en tiempo real de "Escribiendo..."
-            if (record.type === 'system' && record.content === '__TYPING__') {
-              const myId = pb.authStore.model?.id || authStore.currentUser?.id;
-              if (record.sender !== myId && chId === activeChannelId.value) {
-                const senderUser = resolveSenderProfile(record.sender, record.expand?.sender);
-                isTyping.value = true;
-                typingUser.value = senderUser.name || 'Compañero';
-                if (typingTimer) clearTimeout(typingTimer);
-                typingTimer = setTimeout(() => {
-                  isTyping.value = false;
-                }, 3500);
-              }
-              // Limpiar el ping de la base de datos de inmediato
-              pb.collection('messages').delete(record.id).catch(() => {});
-              return;
-            }
+  // ---------- Tiempo real ----------
 
-            if (!messagesByChannel.value[chId]) {
-              messagesByChannel.value[chId] = [];
-            }
+  function handleMessageEvent(e) {
+    const record = e.record;
+    const chId = record.channel;
+    if (record.type === 'system') return;
 
-            const alreadyExists = messagesByChannel.value[chId].some(
-              m => m.id === record.id || (m.content === record.content && m.sender?.id === record.sender)
-            );
+    if (e.action === 'delete') {
+      removeLocalMessage(chId, record.id);
+      return;
+    }
 
-            if (!alreadyExists) {
-              const senderUser = resolveSenderProfile(record.sender, record.expand?.sender);
+    const list = listFor(chId);
+    const existing = list.find(m => m.id === record.id);
 
-              messagesByChannel.value[chId].push({
-                id: record.id,
-                channel: chId,
-                sender: senderUser,
-                content: record.content,
-                type: record.type || 'text',
-                created: record.created,
-                attachments: [],
-                reactions: record.reactions || {}
-              });
-
-              savePersistentMessages(messagesByChannel.value);
-
-              if (record.type === 'file') {
-                setTimeout(() => fetchMessages(chId), 400);
-              }
-
-              if (soundEnabled.value) {
-                playChimeSound('receive');
-              }
-            }
-          } else if (e.action === 'delete') {
-            deleteMessage(e.record.id);
-          }
-        });
+    if (e.action === 'update') {
+      if (existing) {
+        existing.content = record.content;
+        existing.reactions = record.reactions || {};
       }
+      return;
+    }
+
+    // create
+    if (existing) return;
+    // Mi propio mensaje: lo resuelve sendMessage cuando vuelve el create()
+    if (record.sender === myId() && list.some(m => m.status === 'sending' && m.content === record.content)) return;
+
+    list.push(mapMessage(record));
+    if (record.sender === myId()) return;
+
+    if (chId === activeChannelId.value) isTyping.value = false;
+    if (soundEnabled.value) playChimeSound('receive');
+  }
+
+  function handleAttachmentEvent(e) {
+    const att = e.record;
+    const list = messagesByChannel.value[att.channel];
+    const msg = list?.find(m => m.id === att.message);
+    if (!msg) return;
+
+    if (e.action === 'delete') {
+      msg.attachments = msg.attachments.filter(a => a.id !== att.id);
+      return;
+    }
+    // Mis subidas en curso las gestiona sendMessage
+    if (e.action !== 'create' || msg.status === 'uploading') return;
+    if (!msg.attachments.some(a => a.id === att.id)) {
+      msg.attachments.push(mapAttachment(att));
+    }
+  }
+
+  let realtimeActive = false;
+  async function subscribeRealtime() {
+    if (realtimeActive) return;
+    realtimeActive = true;
+    try {
+      await Promise.all([
+        pb.collection('messages').subscribe('*', handleMessageEvent, { expand: MESSAGE_EXPAND }),
+        pb.collection('attachments').subscribe('*', handleAttachmentEvent),
+        pb.realtime.subscribe('typing', handleTypingEvent),
+        // Tras una reconexión puede haberse perdido algo: recargar
+        pb.realtime.subscribe('PB_CONNECT', () => fetchMessages(activeChannelId.value))
+      ]);
     } catch (err) {
+      realtimeActive = false;
       console.warn('Error en suscripción tiempo real PocketBase:', err.message);
     }
   }
 
+  async function unsubscribeRealtime() {
+    realtimeActive = false;
+    try {
+      await pb.realtime.unsubscribe();
+    } catch (_) {}
+  }
+
+  // Red de seguridad: si el tiempo real cae, refrescar cada 3 s; si va bien, cada 30 s
   let pollingInterval = null;
   function startPolling() {
-    if (pollingInterval) clearInterval(pollingInterval);
+    stopPolling();
     pollingInterval = setInterval(() => {
-      fetchMessages(activeChannelId.value);
-    }, 2000);
+      const interval = pb.realtime.isConnected ? 30000 : 3000;
+      if (Date.now() - lastFetchAt >= interval) {
+        fetchMessages(activeChannelId.value);
+      }
+    }, 3000);
   }
 
   function stopPolling() {
@@ -550,13 +510,13 @@ export const useChatStore = defineStore('chat', () => {
     fetchChannels,
     fetchMessages,
     subscribeRealtime,
+    unsubscribeRealtime,
     startPolling,
     stopPolling,
     emitTyping,
     clearMyTyping,
     setActiveChannel,
     sendMessage,
-    deleteMessage,
-    clearActiveChannel
+    deleteMessage
   };
 });
