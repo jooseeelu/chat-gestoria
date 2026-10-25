@@ -67,6 +67,28 @@
         </span>
       </button>
 
+      <!-- Instalar como aplicación (PWA) -->
+      <button
+        v-if="pwaStore.canInstall"
+        @click="pwaStore.install()"
+        class="flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-colors cursor-pointer"
+        title="Instalar el chat como aplicación"
+      >
+        <MonitorDown class="w-4 h-4" />
+        <span class="hidden md:inline">Instalar app</span>
+      </button>
+
+      <!-- Notificaciones push -->
+      <button
+        @click="pwaStore.togglePush()"
+        :disabled="pwaStore.pushBusy"
+        class="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+        :title="pwaStore.pushEnabled ? 'Notificaciones activadas (clic para desactivar)' : 'Activar notificaciones de mensajes nuevos'"
+      >
+        <BellRing v-if="pwaStore.pushEnabled" class="w-4 h-4 text-amber-600 dark:text-amber-400" />
+        <BellOff v-else class="w-4 h-4" />
+      </button>
+
       <!-- Sonido Chime Toggle -->
       <button 
         @click="chatStore.toggleSound()"
@@ -140,11 +162,15 @@ import {
   VolumeX,
   UserCog,
   Sun,
-  Moon
+  Moon,
+  BellRing,
+  BellOff,
+  MonitorDown
 } from 'lucide-vue-next';
 import { useChatStore } from '@/stores/chat';
 import { useDocumentStore } from '@/stores/documents';
 import { useAuthStore } from '@/stores/auth';
+import { usePwaStore } from '@/stores/pwa';
 import { useDark, useToggle } from '@vueuse/core';
 
 defineEmits(['open-command', 'toggle-sidebar']);
@@ -153,6 +179,7 @@ const router = useRouter();
 const chatStore = useChatStore();
 const docStore = useDocumentStore();
 const authStore = useAuthStore();
+const pwaStore = usePwaStore();
 
 const isDark = useDark();
 const toggleDark = useToggle(isDark);

@@ -129,7 +129,7 @@
 
             <div class="flex items-center gap-1">
               <button 
-                v-if="doc.file_type === 'image' || doc.file_type === 'pdf'"
+                v-if="getPreviewKind(doc)"
                 @click="docStore.setPreviewFile(doc)"
                 class="p-1.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 rounded-lg transition-colors cursor-pointer"
                 title="Previsualizar"
@@ -169,7 +169,7 @@ import {
 } from 'lucide-vue-next';
 import { useDocumentStore } from '@/stores/documents';
 import { formatFileSize } from '@/utils/formatters';
-import { getFileTypeBadge } from '@/utils/fileIcons';
+import { getFileTypeBadge, getPreviewKind } from '@/utils/fileIcons';
 
 const docStore = useDocumentStore();
 

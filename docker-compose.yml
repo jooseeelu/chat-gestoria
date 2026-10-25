@@ -16,6 +16,19 @@ services:
     networks:
       - gestoria_net
 
+  # Envío de notificaciones Web Push (solo accesible desde la red interna)
+  push:
+    build:
+      context: ./push
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "3000"
+    volumes:
+      - push_data:/data
+    networks:
+      - gestoria_net
+
   # Frontend Vue 3 + Vite servido con Nginx
   # Expuesto en 127.0.0.1:3080 (puerto 100% libre comprobado en el VPS)
   frontend:
@@ -35,6 +48,8 @@ services:
 volumes:
   pb_data:
     name: chat_gestoria_pb_data
+  push_data:
+    name: chat_gestoria_push_data
 
 networks:
   gestoria_net:

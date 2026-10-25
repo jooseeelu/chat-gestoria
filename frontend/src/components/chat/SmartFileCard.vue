@@ -89,7 +89,7 @@ import {
   Image as ImageIcon 
 } from 'lucide-vue-next';
 import { formatFileSize } from '@/utils/formatters';
-import { getFileTypeBadge } from '@/utils/fileIcons';
+import { getFileTypeBadge, getPreviewKind } from '@/utils/fileIcons';
 import { useDocumentStore } from '@/stores/documents';
 
 const props = defineProps({
@@ -103,9 +103,7 @@ const docStore = useDocumentStore();
 
 const badgeInfo = computed(() => getFileTypeBadge(props.file.file_type));
 
-const canPreview = computed(() => {
-  return props.file.file_type === 'image' || props.file.file_type === 'pdf';
-});
+const canPreview = computed(() => !!getPreviewKind(props.file));
 
 const badgeStyle = computed(() => badgeInfo.value.bg);
 

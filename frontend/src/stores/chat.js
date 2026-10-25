@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { pb, mapUser, initialsAvatar } from '@/api/pocketbase';
 import { useAuthStore } from './auth';
 import { detectFileType } from '@/utils/fileIcons';
@@ -50,6 +50,36 @@ export const useChatStore = defineStore('chat', () => {
       const matchFile = m.attachments?.some(a => a.filename?.toLowerCase().includes(query));
       return matchText || matchSender || matchFile;
     });
+  });
+
+  // ---------- No leídos (título de la pestaña y globo del icono de la app) ----------
+
+  const BASE_TITLE = document.title;
+  const totalUnread = computed(() => channels.value.reduce((acc, c) => acc + (c.unread_count || 0), 0));
+
+  function incrementUnread(channelId) {
+    const channel = channels.value.find(c => c.id === channelId);
+    if (channel) channel.unread_count = (channel.unread_count || 0) + 1;
+  }
+
+  function resetUnread(channelId) {
+    const channel = channels.value.find(c => c.id === channelId);
+    if (channel) channel.unread_count = 0;
+  }
+
+  watch(totalUnread, (total) => {
+    document.title = total > 0 ? `(${total}) ${BASE_TITLE}` : BASE_TITLE;
+    try {
+      if (total > 0) navigator.setAppBadge?.(total);
+      else navigator.clearAppBadge?.();
+    } catch (_) {}
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      resetUnread(activeChannelId.value);
+      try { navigator.clearAppBadge?.(); } catch (_) {}
+    }
   });
 
   function myId() {
@@ -195,7 +225,15 @@ export const useChatStore = defineStore('chat', () => {
     inChatSearch.value = '';
     isSearchOpen.value = false;
     isTyping.value = false;
+    resetUnread(channelId);
     fetchMessages(channelId);
+  }
+
+  // Desde una notificación o un enlace ?channel=...
+  function openChannel(channelId) {
+    if (channelId && channels.value.some(c => c.id === channelId)) {
+      setActiveChannel(channelId);
+    }
   }
 
   function toggleSound() {
@@ -424,6 +462,7 @@ export const useChatStore = defineStore('chat', () => {
     if (record.sender === myId()) return;
 
     if (chId === activeChannelId.value) isTyping.value = false;
+    if (chId !== activeChannelId.value || document.visibilityState !== 'visible') incrementUnread(chId);
     if (soundEnabled.value) playChimeSound('receive');
   }
 
@@ -516,6 +555,8 @@ export const useChatStore = defineStore('chat', () => {
     emitTyping,
     clearMyTyping,
     setActiveChannel,
+    openChannel,
+    totalUnread,
     sendMessage,
     deleteMessage
   };

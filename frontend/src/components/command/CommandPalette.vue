@@ -82,11 +82,15 @@ import {
   FileSpreadsheet, 
   Sparkles,
   LogOut,
-  KeyRound 
+  KeyRound,
+  BellRing,
+  BellOff,
+  MonitorDown
 } from 'lucide-vue-next';
 import { useChatStore } from '@/stores/chat';
 import { useDocumentStore } from '@/stores/documents';
 import { useAuthStore } from '@/stores/auth';
+import { usePwaStore } from '@/stores/pwa';
 import { useDark, useToggle } from '@vueuse/core';
 
 const router = useRouter();
@@ -99,6 +103,7 @@ const inputRef = ref(null);
 const chatStore = useChatStore();
 const docStore = useDocumentStore();
 const authStore = useAuthStore();
+const pwaStore = usePwaStore();
 
 const isDark = useDark();
 const toggleDark = useToggle(isDark);
@@ -133,6 +138,24 @@ const allItems = computed(() => {
     icon: isDark.value ? Sun : Moon,
     action: () => toggleDark()
   });
+
+  items.push({
+    id: 'act_push',
+    label: pwaStore.pushEnabled ? 'Desactivar notificaciones en este dispositivo' : 'Activar notificaciones de mensajes nuevos',
+    category: 'Notificaciones',
+    icon: pwaStore.pushEnabled ? BellOff : BellRing,
+    action: () => pwaStore.togglePush()
+  });
+
+  if (pwaStore.canInstall) {
+    items.push({
+      id: 'act_install',
+      label: 'Instalar el chat como aplicación',
+      category: 'App',
+      icon: MonitorDown,
+      action: () => pwaStore.install()
+    });
+  }
 
   // Cambiar contraseña
   items.push({

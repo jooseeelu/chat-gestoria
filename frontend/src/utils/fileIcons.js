@@ -27,6 +27,22 @@ export function detectFileType(filename, mimeType = '') {
   return 'other';
 }
 
+const HTML_EXTS = ['html', 'htm'];
+const TEXT_EXTS = ['txt', 'csv', 'json', 'md', 'xml', 'log', 'js', 'ts', 'css', 'sql', 'yml', 'yaml', 'ini', 'env', 'py', 'php', 'vue', 'sh'];
+
+/**
+ * Cómo se puede previsualizar un archivo en el visor: 'image' | 'pdf' | 'html' | 'text' | null
+ */
+export function getPreviewKind(file) {
+  if (!file?.url || file.failed) return null;
+  if (file.file_type === 'image') return 'image';
+  if (file.file_type === 'pdf') return 'pdf';
+  const ext = file.filename?.split('.').pop()?.toLowerCase();
+  if (HTML_EXTS.includes(ext)) return 'html';
+  if (TEXT_EXTS.includes(ext)) return 'text';
+  return null;
+}
+
 export function getFileTypeBadge(fileType) {
   switch (fileType) {
     case 'pdf':
