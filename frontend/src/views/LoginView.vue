@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen w-screen flex items-center justify-center p-4 bg-gradient-to-b from-slate-50 via-slate-100/70 to-slate-200/60 text-slate-800 relative overflow-hidden select-none">
+  <div class="h-full w-full overflow-y-auto flex items-center justify-center p-4 bg-gradient-to-b from-slate-50 via-slate-100/70 to-slate-200/60 text-slate-800 relative overflow-hidden select-none">
     
     <!-- Halos de luz sutiles y elegantes en dorado corporativo -->
     <div class="absolute -top-32 -left-32 w-80 h-80 bg-amber-200/40 rounded-full blur-3xl pointer-events-none"></div>

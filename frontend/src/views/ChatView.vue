@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-[100dvh] w-screen overflow-hidden bg-slate-50 dark:bg-[#0b1329] text-slate-800 dark:text-slate-100 transition-colors duration-200">
+  <div class="flex h-full w-full overflow-hidden bg-slate-50 dark:bg-[#0b1329] text-slate-800 dark:text-slate-100 transition-colors duration-200">
     
     <!-- Sidebar de Canales y Equipo (Desktop) -->
     <div class="hidden lg:block h-full">
@@ -23,7 +23,7 @@
           class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity"
           @click="isMobileSidebarOpen = false"
         ></div>
-        <div class="relative z-10 w-80 max-w-[85vw] h-full shadow-2xl">
+        <div class="relative z-10 w-80 max-w-[85vw] h-full shadow-2xl pt-safe bg-white dark:bg-[#0b1329]">
           <SidebarChannels @close-sidebar="isMobileSidebarOpen = false" />
         </div>
       </div>
@@ -94,6 +94,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { X } from 'lucide-vue-next';
 import { usePwaStore } from '@/stores/pwa';
+import { refreshFileToken } from '@/api/pocketbase';
 import SidebarChannels from '@/components/layout/SidebarChannels.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
 import ChatWindow from '@/components/chat/ChatWindow.vue';
@@ -136,6 +137,8 @@ onMounted(async () => {
     router.replace('/login');
     return;
   }
+  // Antes de cargar mensajes: sin token no se pueden ver los adjuntos protegidos
+  await refreshFileToken();
   await chatStore.fetchChannels();
 
   // Abierto desde una notificación: /?channel=ID

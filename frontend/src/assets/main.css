@@ -5,6 +5,29 @@
 @layer base {
   html {
     color-scheme: dark light;
+    /* iOS: evitar que el texto se reescale al girar el móvil */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    /* iOS: sin rebote elástico del documento ni resaltado gris al tocar */
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .safe-area-root {
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Paneles a pantalla completa (fixed) que no heredan el padding de la raíz */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pt-safe-4 {
+    padding-top: max(1rem, env(safe-area-inset-top));
   }
   
   /* Custom sleek scrollbar con toques dorados sutiles */

@@ -27,7 +27,7 @@
     >
       <aside 
         v-if="docStore.isVaultOpen"
-        class="fixed top-0 right-0 bottom-0 z-50 w-full max-w-md bg-white dark:bg-[#0f172a] border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col text-slate-800 dark:text-slate-100 transition-colors duration-200"
+        class="fixed top-0 right-0 bottom-0 z-50 w-full max-w-md pt-safe bg-white dark:bg-[#0f172a] border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col text-slate-800 dark:text-slate-100 transition-colors duration-200"
       >
         <!-- Header del Drawer -->
         <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">

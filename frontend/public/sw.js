@@ -48,6 +48,9 @@ self.addEventListener('push', (event) => {
       badge: '/icons/badge-96.png',
       tag: data.channel ? 'channel-' + data.channel : undefined,
       renotify: true,
+      // Sonido del sistema (la web no puede elegir un sonido propio) y vibración en Android
+      silent: false,
+      vibrate: [120, 60, 120],
       timestamp: Date.now(),
       data: { channel: data.channel || '' }
     });

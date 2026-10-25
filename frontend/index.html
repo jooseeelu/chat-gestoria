@@ -13,12 +13,171 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="eMadrid Chat" />
+    <meta name="format-detection" content="telephone=no" />
+    <!-- Pantallas de arranque de iOS (iOS ignora el manifest: sin ellas se ve un fogonazo blanco) -->
+    <link rel="apple-touch-startup-image" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/1320x2868.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/1206x2622.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/1290x2796.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/1179x2556.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/1284x2778.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/1170x2532.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/1125x2436.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/1242x2688.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/828x1792.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/1242x2208.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/750x1334.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/640x1136.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/2048x2732.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/1668x2388.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/1640x2360.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 810px) and (device-height: 1080px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/1620x2160.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/1488x2266.png" />
     <!-- Inter Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!--
+      Splash de arranque. Su primer fotograma es idéntico a la pantalla de arranque de iOS
+      (fondo #0b1329 y la G de 96px en el centro), así el paso de una a otra no se nota.
+      Lo retira src/main.js cuando la app está lista.
+    -->
+    <style>
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0b1329;
+        overflow: hidden;
+        transition: opacity 0.5s ease, visibility 0.5s ease;
+      }
+      #splash.sp-hide { opacity: 0; visibility: hidden; }
+      #splash .sp-glow {
+        position: absolute;
+        width: 420px;
+        height: 420px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(212, 175, 55, 0.22) 0%, rgba(212, 175, 55, 0.06) 40%, transparent 70%);
+        opacity: 0;
+        animation: sp-glow 2.4s ease-in-out 0.1s infinite;
+      }
+      #splash .sp-center {
+        position: relative;
+        width: 96px;
+        height: 96px;
+        transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      #splash.sp-hide .sp-center { transform: scale(1.18); }
+      #splash .sp-logo {
+        position: relative;
+        z-index: 2;
+        width: 96px;
+        height: 96px;
+        display: block;
+        animation: sp-breathe 2.4s ease-in-out infinite;
+      }
+      /* Brillo dorado que recorre la G (recortado con la propia silueta del logo) */
+      #splash .sp-shine {
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        background: linear-gradient(105deg, transparent 35%, rgba(255, 248, 220, 0.85) 50%, transparent 65%);
+        background-size: 250% 100%;
+        -webkit-mask: url(/splash/logo.png) center / contain no-repeat;
+        mask: url(/splash/logo.png) center / contain no-repeat;
+        animation: sp-shine 2.4s ease-in-out 0.3s infinite;
+      }
+      /* Anillo que gira alrededor del logo */
+      #splash .sp-ring {
+        position: absolute;
+        inset: -22px;
+        border-radius: 50%;
+        background: conic-gradient(from 0deg, transparent 0 62%, rgba(212, 175, 55, 0.15) 70%, #d4af37 88%, #fdf3d6 95%, transparent 100%);
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+        mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+        opacity: 0;
+        animation: sp-fade 0.6s ease 0.15s forwards, sp-spin 1.15s linear infinite;
+      }
+      #splash .sp-brand {
+        position: absolute;
+        top: calc(50% + 84px);
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-size: 19px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        color: #e2e8f0;
+        opacity: 0;
+        transform: translateY(8px);
+        animation: sp-up 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s forwards;
+      }
+      #splash .sp-brand b {
+        font-weight: 800;
+        background: linear-gradient(90deg, #f6e29f, #d4af37, #aa7e30);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      #splash .sp-sub {
+        display: block;
+        margin-top: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: #64748b;
+      }
+      #splash .sp-bar {
+        position: absolute;
+        bottom: calc(env(safe-area-inset-bottom) + 56px);
+        left: 50%;
+        width: 132px;
+        height: 3px;
+        margin-left: -66px;
+        border-radius: 99px;
+        background: rgba(255, 255, 255, 0.07);
+        overflow: hidden;
+        opacity: 0;
+        animation: sp-fade 0.5s ease 0.35s forwards;
+      }
+      #splash .sp-bar i {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 45%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, transparent, #d4af37, #fdf3d6, #d4af37, transparent);
+        animation: sp-load 1.15s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+      }
+      @keyframes sp-spin { to { transform: rotate(360deg); } }
+      @keyframes sp-fade { to { opacity: 1; } }
+      @keyframes sp-up { to { opacity: 1; transform: none; } }
+      @keyframes sp-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+      @keyframes sp-glow { 0%, 100% { opacity: 0.35; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.05); } }
+      @keyframes sp-shine { 0% { background-position: 150% 0; } 60%, 100% { background-position: -100% 0; } }
+      @keyframes sp-load { 0% { left: -45%; } 100% { left: 100%; } }
+      @media (prefers-reduced-motion: reduce) {
+        #splash *, #splash { animation: none !important; transition: opacity 0.2s ease !important; }
+        #splash .sp-ring, #splash .sp-bar { display: none; }
+        #splash .sp-brand { opacity: 1; transform: none; }
+      }
+    </style>
   </head>
   <body class="bg-slate-50 dark:bg-[#0b1329] text-slate-800 dark:text-slate-100 antialiased overflow-hidden select-none transition-colors duration-200">
+    <div id="splash" aria-hidden="true">
+      <div class="sp-glow"></div>
+      <div class="sp-center">
+        <div class="sp-ring"></div>
+        <img class="sp-logo" src="/splash/logo.png" alt="" />
+        <div class="sp-shine"></div>
+      </div>
+      <div class="sp-brand">Gestoría <b>eMadrid</b><span class="sp-sub">Chat interno</span></div>
+      <div class="sp-bar"><i></i></div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

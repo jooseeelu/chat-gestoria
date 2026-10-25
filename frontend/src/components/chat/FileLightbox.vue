@@ -2,7 +2,7 @@
   <Teleport to="body">
     <div
       v-if="docStore.activePreviewFile"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in-up"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 pt-safe-4 bg-slate-950/80 backdrop-blur-md animate-fade-in-up"
       @click.self="docStore.closePreview"
     >
       <div class="relative w-full max-w-4xl max-h-[90vh] bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
@@ -79,13 +79,14 @@
               <p class="text-slate-300 font-medium">{{ textError }}</p>
             </div>
             <!--
-              sandbox="allow-scripts" SIN allow-same-origin: el HTML corre en un origen
-              aislado y no puede leer la sesión ni tocar el chat.
+              Vista estática: sandbox sin allow-scripts ni allow-same-origin, así que el HTML
+              no ejecuta código ni puede leer la sesión o tocar el chat (además, la CSP de la
+              app se hereda en el srcdoc y bloquearía cualquier script igualmente).
             -->
             <iframe
               v-else-if="previewKind === 'html' && !showSource"
               :srcdoc="textContent"
-              sandbox="allow-scripts allow-popups"
+              sandbox="allow-popups allow-popups-to-escape-sandbox"
               referrerpolicy="no-referrer"
               class="w-full h-[75vh] rounded-lg border border-slate-800 bg-white"
             ></iframe>

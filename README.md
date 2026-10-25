@@ -103,7 +103,7 @@ Las migraciones preparan a los miembros iniciales con acceso preconfigurado:
 | **Jose Luis** | `admin` (Desarrollo) | Desarrollador | `joseluis@gestoriaemadrid.com` |
 | **Johan** | `member` (Desarrollo) | Desarrollador | `johanfernix9@gmail.com` |
 
-*(Contraseña de acceso inicial por defecto: `eMadrid2025!`)*
+*(Las contraseñas no se publican aquí: el administrador las establece desde el panel `/_/`.)*
 
 ---
 

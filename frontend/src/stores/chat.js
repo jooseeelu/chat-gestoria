@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
-import { pb, mapUser, initialsAvatar } from '@/api/pocketbase';
+import { pb, mapUser, initialsAvatar, fileToken, protectedFileUrl } from '@/api/pocketbase';
 import { useAuthStore } from './auth';
 import { detectFileType } from '@/utils/fileIcons';
 import { playChimeSound } from '@/utils/formatters';
@@ -103,15 +103,28 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function mapAttachment(att) {
+    const fileRef = { id: att.id, collectionId: att.collectionId, collectionName: att.collectionName, file: att.file };
     return {
       id: att.id,
       message: att.message,
       filename: att.filename,
       file_type: att.file_type || detectFileType(att.filename, att.mime_type),
       size: att.size,
-      url: pb.files.getUrl(att, att.file)
+      fileRef,
+      url: protectedFileUrl(fileRef)
     };
   }
+
+  // Al renovarse el token de archivos, regenerar los enlaces de todos los adjuntos cargados
+  watch(fileToken, () => {
+    for (const list of Object.values(messagesByChannel.value)) {
+      for (const msg of list) {
+        for (const att of msg.attachments || []) {
+          if (att.fileRef) att.url = protectedFileUrl(att.fileRef);
+        }
+      }
+    }
+  });
 
   function mapReply(record) {
     const parent = record.expand?.reply_to;

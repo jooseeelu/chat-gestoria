@@ -37,7 +37,8 @@ migrate((db) => {
       const record = new Record(usersCollection);
       record.setUsername(u.username);
       record.setEmail(u.email);
-      record.setPassword("eMadrid2025!"); // Contraseña temporal inicial
+      // Contraseña aleatoria: el administrador la fija desde el panel /_/ antes del primer acceso
+      record.setPassword($security.randomString(32));
       record.set("name", u.name);
       record.set("role", u.role);
       record.set("position", u.position);

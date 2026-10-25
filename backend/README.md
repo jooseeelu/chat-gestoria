@@ -11,7 +11,7 @@ Backend ligero y de alto rendimiento basado en **PocketBase** para autenticació
    - **Andrés**: `andres@gestoriaemadrid.com` (Director / Titular - `admin`)
    - **Jose Luis**: `joseluis@gestoriaemadrid.com` (Desarrollador - `admin`)
    - **Johan**: `johanfernix9@gmail.com` (Desarrollador - `member`)
-   - Contraseña inicial por defecto: `eMadrid2025!`
+   - Contraseña inicial: aleatoria. El administrador la establece desde el panel `/_/` antes del primer acceso.
    - Canales: `#general`, `#fiscal-tributario`, `#laboral-nominas`, `#contable-cierres`, `#urgencias`.
 
 ## Ejecución Local (Standalone)

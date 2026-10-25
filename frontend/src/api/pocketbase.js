@@ -1,8 +1,56 @@
 import PocketBase from 'pocketbase';
+import { ref } from 'vue';
 
 export const PB_URL = import.meta.env.VITE_POCKETBASE_URL || (import.meta.env.DEV ? 'http://localhost:8090' : '/');
 export const pb = new PocketBase(PB_URL);
 pb.autoCancellation(false);
+
+/**
+ * Token para descargar adjuntos protegidos. Lo emite PocketBase solo a usuarios
+ * con sesión y caduca (1 h): se renueva un minuto antes de que expire.
+ */
+export const fileToken = ref('');
+let fileTokenTimer = null;
+
+function tokenExpiry(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.exp * 1000;
+  } catch (_) {
+    return Date.now() + 60_000;
+  }
+}
+
+export async function refreshFileToken() {
+  if (fileTokenTimer) clearTimeout(fileTokenTimer);
+  if (!pb.authStore.isValid) {
+    fileToken.value = '';
+    return;
+  }
+  let nextIn = 30_000;
+  try {
+    const token = await pb.files.getToken();
+    fileToken.value = token;
+    nextIn = Math.max(30_000, tokenExpiry(token) - Date.now() - 60_000);
+  } catch (e) {
+    console.warn('No se pudo obtener el token de archivos:', e);
+  }
+  fileTokenTimer = setTimeout(refreshFileToken, nextIn);
+}
+
+export function clearFileToken() {
+  if (fileTokenTimer) clearTimeout(fileTokenTimer);
+  fileTokenTimer = null;
+  fileToken.value = '';
+}
+
+/**
+ * URL de un adjunto protegido con el token vigente
+ */
+export function protectedFileUrl(fileRef) {
+  if (!fileRef) return '';
+  return pb.files.getUrl(fileRef, fileRef.file, fileToken.value ? { token: fileToken.value } : undefined);
+}
 
 export function getPbFileUrl(record, filename, thumb = '') {
   if (!record || !filename) return '';

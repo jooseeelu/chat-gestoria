@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { pb, mapUser } from '@/api/pocketbase';
+import { pb, mapUser, clearFileToken } from '@/api/pocketbase';
 import { usePwaStore } from './pwa';
 
 // Claves de la versión antigua que lo guardaba todo en el navegador
@@ -144,6 +144,7 @@ export const useAuthStore = defineStore('auth', () => {
     isSettingsOpen.value = false;
     isLogoutModalOpen.value = false;
     pb.realtime.unsubscribe().catch(() => {});
+    clearFileToken();
     pb.authStore.clear();
   }
 
