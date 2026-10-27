@@ -4,7 +4,7 @@
  * - Recibe las notificaciones push y abre el canal correcto al tocarlas.
  * No cachea la app: así cada despliegue se ve al momento.
  */
-const OFFLINE_CACHE = 'emadrid-offline-v1';
+const OFFLINE_CACHE = 'emadrid-offline-v2';
 const OFFLINE_ASSETS = ['/offline.html', '/icons/icon-192.png'];
 
 self.addEventListener('install', (event) => {
