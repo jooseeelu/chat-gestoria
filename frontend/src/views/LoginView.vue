@@ -12,9 +12,9 @@
       <div class="text-center mb-6">
         <div class="inline-flex items-center justify-center mb-3">
           <img 
-            src="/logo-g.png" 
-            alt="Gestoría eMadrid Logo" 
-            class="w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-md hover:scale-105 transition-transform" 
+            src="/icons/app-icon.svg"
+            alt="eMadrid Chat"
+            class="w-20 h-20 sm:w-24 sm:h-24 rounded-[22%] shadow-lg shadow-slate-900/20 hover:scale-105 transition-transform"
           />
         </div>
         <h1 class="text-2xl font-bold text-slate-900 tracking-tight">

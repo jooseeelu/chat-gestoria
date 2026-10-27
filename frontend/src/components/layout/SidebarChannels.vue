@@ -4,11 +4,11 @@
     <!-- Branding Gestoría eMadrid con Logo G Dorado Oficial y Botón Cerrar Móvil -->
     <div class="h-16 px-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/70 dark:bg-[#070e1b]">
       <div class="flex items-center gap-2.5">
-        <!-- Logo Oficial de la G Dorada de Gestoría eMadrid -->
-        <img 
-          src="/logo-g.png" 
-          alt="Gestoría eMadrid" 
-          class="w-10 h-10 object-contain drop-shadow-sm hover:scale-105 transition-transform cursor-pointer" 
+        <!-- Icono de la app (burbuja + avión) -->
+        <img
+          src="/icons/app-icon.svg"
+          alt="eMadrid Chat"
+          class="w-10 h-10 rounded-[22%] shadow-sm hover:scale-105 transition-transform cursor-pointer"
         />
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
