@@ -78,14 +78,20 @@
       />
     </div>
 
-    <!-- Botón flotante para bajar al último mensaje cuando se ha subido el scroll -->
-    <button 
+    <!-- Bajar al final (como WhatsApp): solo con contador si de verdad han llegado mensajes mientras leías arriba -->
+    <button
       v-if="showScrollBottomButton"
-      @click="scrollToBottom"
-      class="absolute bottom-20 right-6 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 dark:bg-slate-800 text-white text-xs font-semibold shadow-lg hover:bg-slate-800 dark:hover:bg-slate-700 transition-all border border-slate-700 animate-fade-in-up"
+      @click="scrollToBottom(true)"
+      class="absolute bottom-24 right-4 sm:right-6 z-30 w-10 h-10 rounded-full flex items-center justify-center bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-200 shadow-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all animate-fade-in-up cursor-pointer"
+      :title="unseenCount > 0 ? `${unseenCount} mensaje(s) nuevo(s)` : 'Ir al último mensaje'"
     >
-      <ArrowDown class="w-3.5 h-3.5" />
-      <span>Nuevos mensajes</span>
+      <ChevronDown class="w-5 h-5" />
+      <span
+        v-if="unseenCount > 0"
+        class="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-amber-600 text-white text-[11px] font-bold flex items-center justify-center"
+      >
+        {{ unseenCount > 99 ? '99+' : unseenCount }}
+      </span>
     </button>
 
     <!-- Input inferior del chat -->
@@ -95,12 +101,13 @@
 
 <script setup>
 import { ref, watch, nextTick, onMounted } from 'vue';
-import { 
+import {
   Search,
   X,
-  ArrowDown
+  ChevronDown
 } from 'lucide-vue-next';
 import { useChatStore } from '@/stores/chat';
+import { useAuthStore } from '@/stores/auth';
 import { getDateDividerLabel, isSameDay } from '@/utils/formatters';
 import ChatMessageBubble from './ChatMessageBubble.vue';
 import ChatInput from './ChatInput.vue';
@@ -108,9 +115,13 @@ import FileUploadZone from './FileUploadZone.vue';
 import TypingIndicator from './TypingIndicator.vue';
 
 const chatStore = useChatStore();
+const authStore = useAuthStore();
 const messagesContainer = ref(null);
 const chatInputRef = ref(null);
 const showScrollBottomButton = ref(false);
+// Mensajes de otros que han llegado mientras estabas leyendo más arriba
+const unseenCount = ref(0);
+const NEAR_BOTTOM_PX = 180;
 
 const isDragging = ref(false);
 let dragCounter = 0;
@@ -135,37 +146,61 @@ function checkIsConsecutive(index) {
   return diffMinutes < 5;
 }
 
-function handleScroll() {
-  if (!messagesContainer.value) return;
-  const { scrollTop, scrollHeight, clientHeight } = messagesContainer.value;
-  showScrollBottomButton.value = scrollHeight - scrollTop - clientHeight > 180;
+function isNearBottom() {
+  const el = messagesContainer.value;
+  if (!el) return true;
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
 }
 
-function scrollToBottom() {
+function handleScroll() {
+  const near = isNearBottom();
+  showScrollBottomButton.value = !near;
+  // Al llegar abajo, lo nuevo ya está visto
+  if (near) unseenCount.value = 0;
+}
+
+function scrollToBottom(smooth = false) {
   nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-    }
+    const el = messagesContainer.value;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    unseenCount.value = 0;
   });
 }
 
+// Sobre la lista completa del canal (no la filtrada por la búsqueda), para que
+// buscar o limpiar la búsqueda no cuente como "mensajes nuevos"
 watch(
-  () => chatStore.currentMessages?.length,
-  () => {
-    scrollToBottom();
+  () => chatStore.rawMessages?.length,
+  (length, previous) => {
+    const added = length - (previous || 0);
+    if (added <= 0) return; // borrados o recargas: no mover el scroll
+
+    const last = chatStore.rawMessages[length - 1];
+    const isMine = last?.sender?.id === authStore.currentUser?.id;
+
+    // Carga inicial, mensaje propio o ya estabas abajo: bajar al final
+    if (!previous || isMine || !showScrollBottomButton.value) {
+      scrollToBottom();
+      return;
+    }
+    // Estabas leyendo más arriba: no arrastrarte, solo contar lo nuevo
+    unseenCount.value += added;
   }
 );
 
 watch(
   () => chatStore.isTyping,
   (typing) => {
-    if (typing) scrollToBottom();
+    if (typing && isNearBottom()) scrollToBottom();
   }
 );
 
 watch(
   () => chatStore.activeChannelId,
   () => {
+    showScrollBottomButton.value = false;
+    unseenCount.value = 0;
     scrollToBottom();
   }
 );
