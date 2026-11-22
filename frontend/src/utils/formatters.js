@@ -75,6 +75,30 @@ export function getDateDividerLabel(dateStr) {
   });
 }
 
+/**
+ * "Últ. vez" estilo WhatsApp: "hace un momento", "hace 5 min", "hoy a las 14:32",
+ * "ayer a las 09:10", "el 12 nov. a las 18:05"
+ */
+export function formatLastSeen(dateStr, now = Date.now()) {
+  if (!dateStr) return 'sin conexión reciente';
+  const date = new Date(dateStr);
+  const diffMin = Math.floor((now - date.getTime()) / 60000);
+  const time = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+  if (diffMin < 1) return 'últ. vez hace un momento';
+  if (diffMin < 60) return `últ. vez hace ${diffMin} min`;
+
+  const today = new Date(now);
+  if (date.toDateString() === today.toDateString()) return `últ. vez hoy a las ${time}`;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `últ. vez ayer a las ${time}`;
+
+  const day = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  return `últ. vez el ${day} a las ${time}`;
+}
+
 export function isSameDay(dateStr1, dateStr2) {
   if (!dateStr1 || !dateStr2) return false;
   return new Date(dateStr1).toDateString() === new Date(dateStr2).toDateString();

@@ -229,12 +229,14 @@ onMounted(async () => {
 
   chatStore.subscribeRealtime();
   chatStore.startPolling();
+  authStore.startPresence();
   navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage);
   window.addEventListener('keydown', onKeydown);
   pwaStore.syncPush();
 });
 
 onUnmounted(() => {
+  authStore.stopPresence();
   chatStore.stopPolling();
   chatStore.unsubscribeRealtime();
   navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage);

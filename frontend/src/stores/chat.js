@@ -181,11 +181,54 @@ export const useChatStore = defineStore('chat', () => {
       console.warn('Error cargando canales:', e.message);
     }
     if (activeChannelId.value) {
+      dividerPendingFor = activeChannelId.value;
       await fetchMessages(activeChannelId.value);
     }
   }
 
   let lastFetchAt = 0;
+
+  // ---------- Separador "N mensajes no leídos" (como WhatsApp) ----------
+  // Se calcula una vez al abrir el canal, antes de marcar los mensajes como leídos,
+  // y se queda hasta cambiar de canal o enviar un mensaje.
+  const unreadDivider = ref({ channelId: '', messageId: '', count: 0 });
+  let dividerPendingFor = '';
+
+  // Más que esto seguidos sin leer = mensajes antiguos de antes de existir el doble
+  // check (nunca se marcaron como leídos): no tiene sentido un "118 no leídos"
+  const MAX_DIVIDER_COUNT = 50;
+  let dividerHint = 0;
+
+  function computeUnreadDivider(channelId) {
+    const me = myId();
+    const list = messagesByChannel.value[channelId] || [];
+    const fromOthers = list.filter(m => !m.status && m.sender?.id !== me);
+
+    let count = 0;
+    if (dividerHint > 0) {
+      // Volviendo a un canal: lo que contó el tiempo real mientras no estabas
+      count = Math.min(dividerHint, fromOthers.length);
+    } else {
+      // Al abrir la app: los últimos mensajes seguidos de otros que aún no he leído
+      for (let i = list.length - 1; i >= 0; i--) {
+        const m = list[i];
+        if (m.status || m.sender?.id === me || (m.read_by || []).includes(me)) break;
+        count++;
+      }
+    }
+    dividerHint = 0;
+
+    if (count === 0 || count > MAX_DIVIDER_COUNT) {
+      clearUnreadDivider();
+      return;
+    }
+    const first = fromOthers[fromOthers.length - count];
+    unreadDivider.value = { channelId, messageId: first.id, count };
+  }
+
+  function clearUnreadDivider() {
+    unreadDivider.value = { channelId: '', messageId: '', count: 0 };
+  }
 
   async function fetchMessages(channelId = activeChannelId.value) {
     if (!channelId) return;
@@ -213,6 +256,10 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       mergeServerMessages(channelId, items.map(r => mapMessage(r, attMap[r.id] || [])));
+      if (dividerPendingFor === channelId) {
+        dividerPendingFor = '';
+        computeUnreadDivider(channelId);
+      }
       markChannelRead(channelId);
     } catch (e) {
       console.warn('Error cargando mensajes de PocketBase:', e.message);
@@ -247,7 +294,10 @@ export const useChatStore = defineStore('chat', () => {
     isTyping.value = false;
     clearSelection();
     cancelEdit();
+    dividerHint = channels.value.find(c => c.id === channelId)?.unread_count || 0;
     resetUnread(channelId);
+    clearUnreadDivider();
+    dividerPendingFor = channelId;
     fetchMessages(channelId);
   }
 
@@ -310,6 +360,7 @@ export const useChatStore = defineStore('chat', () => {
     const msg = list[list.length - 1];
 
     replyingTo.value = null;
+    clearUnreadDivider();
     if (soundEnabled.value) playChimeSound('send');
 
     let record;
@@ -902,6 +953,8 @@ export const useChatStore = defineStore('chat', () => {
     startForward,
     cancelForward,
     forwardMessages,
-    markChannelRead
+    markChannelRead,
+    unreadDivider,
+    clearUnreadDivider
   };
 });

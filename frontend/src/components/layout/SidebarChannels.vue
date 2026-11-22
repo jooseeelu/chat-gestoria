@@ -91,60 +91,56 @@
         </div>
       </div>
 
-      <!-- Equipo de la Gestoría (Conectados) -->
+      <!-- Equipo: estado real de cada compañero -->
       <div>
         <div class="flex items-center justify-between px-2 mb-2">
           <span class="text-xs sm:text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-            Equipo IT
+            Equipo
           </span>
-          <div 
+          <span
             class="flex items-center gap-1.5 text-xs sm:text-[10px] font-medium"
-            :class="isPeerOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'"
+            :class="authStore.onlineMembers.length ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'"
           >
-            <span 
-              class="w-2 h-2 rounded-full" 
-              :class="isPeerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400 dark:bg-slate-600'"
-            ></span>
-            <span>{{ isPeerOnline ? 'Online' : 'Desconectado' }}</span>
-          </div>
+            <span class="w-2 h-2 rounded-full" :class="authStore.onlineMembers.length ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"></span>
+            {{ authStore.onlineMembers.length ? `${authStore.onlineMembers.length} en línea` : 'Nadie en línea' }}
+          </span>
         </div>
 
-        <!-- Tarjeta del compañero (Johan si eres Jose Luis) -->
-        <div class="p-3 sm:p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 shadow-xs flex items-center justify-between hover:border-amber-500/30 transition-colors">
-          <div class="flex items-center gap-2.5 min-w-0">
+        <div class="space-y-1">
+          <div
+            v-for="member in teammates"
+            :key="member.id"
+            class="flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
+          >
             <div class="relative flex-shrink-0">
-              <img 
-                :src="authStore.peerUser?.avatar" 
-                :alt="authStore.peerUser?.name" 
-                class="w-10 h-10 sm:w-9 sm:h-9 rounded-xl object-cover ring-1 ring-slate-300 dark:ring-slate-700"
+              <img
+                :src="member.avatar"
+                :alt="member.name"
+                class="w-10 h-10 sm:w-9 sm:h-9 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700"
               />
-              <span 
-                class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-slate-900"
-                :class="isPeerOnline ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-600'"
+              <span
+                class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-white dark:ring-[#0b1329] transition-colors"
+                :class="authStore.isUserOnline(member) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"
               ></span>
             </div>
-            <div class="min-w-0">
+            <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5">
-                <span class="text-sm sm:text-xs font-bold text-slate-900 dark:text-white block truncate">
-                  {{ authStore.peerUser?.name }}
-                </span>
-                <span class="text-[10px] text-amber-700 dark:text-amber-400 font-semibold font-mono hidden sm:inline">
-                  IT
-                </span>
+                <span class="text-sm sm:text-xs font-bold text-slate-900 dark:text-white truncate">{{ member.name }}</span>
+                <span
+                  v-if="member.role === 'admin'"
+                  class="text-[9px] font-bold px-1 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 flex-shrink-0"
+                >ADMIN</span>
               </div>
-              <span class="text-xs sm:text-[10px] text-slate-500 dark:text-slate-400 block truncate">
-                Desarrollador
+              <span
+                class="text-xs sm:text-[11px] block truncate"
+                :class="authStore.isUserOnline(member) ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-500 dark:text-slate-400'"
+              >
+                {{ authStore.presenceLabel(member) }}<template v-if="member.position"> · {{ member.position }}</template>
               </span>
             </div>
           </div>
 
-          <div class="flex items-center gap-1">
-            <span 
-              class="w-2.5 h-2.5 rounded-full" 
-              :class="isPeerOnline ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"
-              :title="isPeerOnline ? 'Activo ahora' : 'Desconectado'"
-            ></span>
-          </div>
+          <p v-if="teammates.length === 0" class="px-2.5 py-2 text-xs text-slate-400">Todavía no hay más miembros.</p>
         </div>
       </div>
 
@@ -178,7 +174,15 @@
         </div>
 
         <div class="flex items-center gap-1">
-          <button 
+          <button
+            @click="toggleDark()"
+            class="p-2 sm:p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+            :title="isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+          >
+            <Sun v-if="isDark" class="w-5 h-5 sm:w-4 sm:h-4" />
+            <Moon v-else class="w-5 h-5 sm:w-4 sm:h-4" />
+          </button>
+          <button
             @click="openSettings"
             class="p-2 sm:p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
             title="Editar mi foto, nombre o contraseña"
@@ -211,8 +215,11 @@ import {
   LogOut, 
   UserCog,
   X,
-  Trash2
+  Trash2,
+  Sun,
+  Moon
 } from 'lucide-vue-next';
+import { useDark, useToggle } from '@vueuse/core';
 import { useChatStore } from '@/stores/chat';
 import { useAuthStore } from '@/stores/auth';
 
@@ -221,8 +228,20 @@ const router = useRouter();
 const chatStore = useChatStore();
 const authStore = useAuthStore();
 
-const isPeerOnline = computed(() => {
-  return authStore.peerUser?.status === 'online';
+const isDark = useDark();
+const toggleDark = useToggle(isDark);
+
+// Compañeros (sin mí): primero los que están en línea, luego por última conexión
+const teammates = computed(() => {
+  const me = authStore.currentUser?.id;
+  return authStore.teamMembers
+    .filter(u => u.id !== me)
+    .slice()
+    .sort((a, b) => {
+      const onlineDiff = Number(authStore.isUserOnline(b)) - Number(authStore.isUserOnline(a));
+      if (onlineDiff) return onlineDiff;
+      return new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0);
+    });
 });
 
 function getChannelIcon(iconName) {

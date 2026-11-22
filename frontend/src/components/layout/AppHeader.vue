@@ -19,8 +19,13 @@
           <h1 class="text-[15px] sm:text-base font-bold text-slate-900 dark:text-white truncate">
             {{ chatStore.activeChannel?.name }}
           </h1>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate hidden md:block">
-            {{ chatStore.activeChannel?.description }}
+          <!-- Estado del equipo como en WhatsApp: escribiendo / en línea / últ. vez -->
+          <p
+            class="text-[11px] truncate transition-colors"
+            :class="headerStatus.highlight ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-slate-500 dark:text-slate-400'"
+            :title="chatStore.activeChannel?.description"
+          >
+            {{ headerStatus.text }}
           </p>
         </div>
       </div>
@@ -102,7 +107,7 @@
       <!-- BOTÓN MODO CLARO / OSCURO (Alternar con 1 clic) -->
       <button 
         @click="toggleDark()"
-        class="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+        class="hidden sm:flex p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
         :title="isDark ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'"
       >
         <Sun v-if="isDark" class="w-4 h-4 text-amber-400 hover:rotate-90 transition-transform" />
@@ -110,7 +115,7 @@
       </button>
 
       <!-- Perfil del usuario actual y ajustes -->
-      <div class="flex items-center gap-1.5 pl-1.5 sm:pl-2 border-l border-slate-200 dark:border-slate-800">
+      <div class="hidden sm:flex items-center gap-1.5 pl-1.5 sm:pl-2 border-l border-slate-200 dark:border-slate-800">
         <img 
           :src="authStore.currentUser?.avatar" 
           :alt="authStore.currentUser?.name"
@@ -123,7 +128,7 @@
             {{ authStore.currentUser?.name }}
           </span>
           <span class="text-[10px] text-amber-700 dark:text-amber-400 block leading-tight font-medium">
-            IT & Sistemas
+            {{ authStore.currentUser?.position || (authStore.currentUser?.role === 'admin' ? 'Administración' : 'Equipo') }}
           </span>
         </div>
         <button 
@@ -147,6 +152,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { 
   Building2,
@@ -182,6 +188,24 @@ const authStore = useAuthStore();
 const pwaStore = usePwaStore();
 
 const isDark = useDark();
+
+// Subtítulo de la cabecera: quién escribe, quién está en línea o cuándo se le vio
+const headerStatus = computed(() => {
+  if (chatStore.isTyping) {
+    return { text: `${chatStore.typingUser} está escribiendo…`, highlight: true };
+  }
+  const online = authStore.onlineMembers;
+  if (online.length === 1) return { text: `${online[0].name} en línea`, highlight: true };
+  if (online.length > 1) {
+    const names = online.map(u => u.name);
+    return { text: `${names.slice(0, -1).join(', ')} y ${names.at(-1)} en línea`, highlight: true };
+  }
+  const others = authStore.teamMembers.filter(u => u.id !== authStore.currentUser?.id);
+  if (others.length === 1) {
+    return { text: `${others[0].name}: ${authStore.presenceLabel(others[0])}`, highlight: false };
+  }
+  return { text: chatStore.activeChannel?.description || '', highlight: false };
+});
 const toggleDark = useToggle(isDark);
 
 function getActiveIcon() {

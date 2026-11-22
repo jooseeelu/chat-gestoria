@@ -153,22 +153,16 @@
       </button>
     </div>
 
-    <!-- Micro-hints de teclado estilo Slack/Linear -->
-    <div class="flex items-center justify-between mt-1.5 px-1 text-xs sm:text-[11px] text-slate-500 dark:text-slate-400">
-      <span class="flex items-center gap-1.5 truncate">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
-        <span class="truncate">Conectado con <strong class="text-slate-800 dark:text-white">{{ authStore.peerUser?.name || 'el equipo' }}</strong></span>
-      </span>
-      <span class="hidden sm:inline-flex items-center gap-1 font-mono flex-shrink-0">
-        <kbd class="kbd-badge">Enter</kbd> enviar • <kbd class="kbd-badge">`code`</kbd> • <kbd class="kbd-badge">**bold**</kbd>
-      </span>
+    <!-- Atajos de teclado (solo en ordenador) -->
+    <div class="hidden sm:flex items-center justify-end mt-1.5 px-1 text-[11px] text-slate-400 dark:text-slate-500 font-mono gap-1">
+      <kbd class="kbd-badge">Enter</kbd> enviar • <kbd class="kbd-badge">Shift+Enter</kbd> nueva línea • <kbd class="kbd-badge">↑</kbd> editar el último • <kbd class="kbd-badge">**negrita**</kbd>
     </div>
 
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue';
+import { ref, computed, nextTick, watch, onMounted } from 'vue';
 import {
   Paperclip,
   Send,
@@ -179,11 +173,9 @@ import {
   Check
 } from 'lucide-vue-next';
 import { useChatStore } from '@/stores/chat';
-import { useAuthStore } from '@/stores/auth';
 import { formatFileSize } from '@/utils/formatters';
 
 const chatStore = useChatStore();
-const authStore = useAuthStore();
 
 const text = ref('');
 const pendingFiles = ref([]);
@@ -197,9 +189,9 @@ const canSend = computed(() => {
 
 const placeholderText = computed(() => {
   if (typeof window !== 'undefined' && window.innerWidth < 640) {
-    return 'Escribe un mensaje...';
+    return 'Mensaje';
   }
-  return `Escribe a ${authStore.peerUser?.name || 'equipo'}... (Markdown, código y pegar capturas con Ctrl+V)`;
+  return `Mensaje en ${chatStore.activeChannel?.name || 'el canal'}… (puedes pegar capturas con Ctrl+V)`;
 });
 
 function triggerFileInput() {
@@ -258,7 +250,38 @@ function adjustHeight() {
 function onInput() {
   adjustHeight();
   chatStore.emitTyping();
+  if (!chatStore.editingMessage) saveDraft(chatStore.activeChannelId, text.value);
 }
+
+// ---------- Borradores por canal (como WhatsApp) ----------
+// Lo que dejas a medio escribir en un canal sigue ahí al volver. Solo en este
+// navegador; se borran al cerrar sesión.
+const DRAFTS_KEY = 'emadrid_drafts';
+
+function loadDrafts() {
+  try {
+    return JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}');
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveDraft(channelId, value) {
+  if (!channelId) return;
+  const drafts = loadDrafts();
+  if (value && value.trim()) drafts[channelId] = value;
+  else delete drafts[channelId];
+  try {
+    localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  } catch (_) {}
+}
+
+function restoreDraft(channelId) {
+  text.value = loadDrafts()[channelId] || '';
+  nextTick(adjustHeight);
+}
+
+onMounted(() => restoreDraft(chatStore.activeChannelId));
 
 // Al empezar a editar: cargar el texto del mensaje en el cuadro y enfocar
 let draftBeforeEdit = '';
@@ -283,6 +306,15 @@ function cancelEditing() {
   chatStore.cancelEdit();
 }
 
+// Cambiar de canal: guardar el borrador del que dejas y recuperar el del nuevo.
+// (Se declara después del watcher de edición: si cambiar de canal cancela una
+// edición, primero se recupera el borrador previo y luego se guarda.)
+watch(() => chatStore.activeChannelId, (channelId, previousId) => {
+  if (previousId) saveDraft(previousId, text.value);
+  pendingFiles.value = [];
+  restoreDraft(channelId);
+});
+
 function handleKeyDown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -302,11 +334,8 @@ function handleKeyDown(e) {
 
 async function submit() {
   if (chatStore.editingMessage) {
-    const newText = text.value;
-    draftBeforeEdit = '';
-    text.value = '';
-    await chatStore.saveEdit(newText);
-    nextTick(adjustHeight);
+    // Al terminar la edición, el watcher devuelve al cuadro lo que estabas escribiendo antes
+    await chatStore.saveEdit(text.value);
     return;
   }
   if (!canSend.value) return;
@@ -314,6 +343,7 @@ async function submit() {
   const contentToSend = text.value;
   const filesToSend = [...pendingFiles.value];
 
+  saveDraft(chatStore.activeChannelId, '');
   text.value = '';
   pendingFiles.value = [];
   showEmojiBar.value = false;

@@ -92,6 +92,7 @@ export function mapUser(record) {
     role: record.role || 'member',
     position: record.position || '',
     status: record.status || 'offline',
+    lastSeen: record.last_seen || '',
     avatar: record.avatar
       ? pb.files.getUrl(record, record.avatar, { thumb: '160x160' })
       : initialsAvatar(name)

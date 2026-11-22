@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { pb, mapUser, clearFileToken } from '@/api/pocketbase';
+import { formatLastSeen } from '@/utils/formatters';
 import { usePwaStore } from './pwa';
 
 // Claves de la versión antigua que lo guardaba todo en el navegador
@@ -37,6 +38,99 @@ export const useAuthStore = defineStore('auth', () => {
     currentUser.value = token && model ? mapUser(model) : null;
   });
 
+  // ---------- Presencia ("en línea" / "últ. vez...") ----------
+  // Mientras la app está visible, cada 30 s se actualiza last_seen. Alguien está
+  // en línea si su status es "online" y su último latido tiene menos de 75 s
+  // (así, si cierra la app sin avisar —sin batería, sin cobertura—, deja de salir
+  // en línea igualmente).
+
+  const HEARTBEAT_MS = 30_000;
+  const PRESENCE_TTL_MS = 75_000;
+  const now = ref(Date.now());
+  setInterval(() => { now.value = Date.now(); }, 20_000);
+
+  function findMember(userOrId) {
+    if (!userOrId) return null;
+    const id = typeof userOrId === 'string' ? userOrId : userOrId.id;
+    return teamMembers.value.find(m => m.id === id) || (typeof userOrId === 'object' ? userOrId : null);
+  }
+
+  function isUserOnline(userOrId) {
+    const user = findMember(userOrId);
+    if (!user) return false;
+    if (user.id === currentUser.value?.id) return true;
+    const last = user.lastSeen ? new Date(user.lastSeen).getTime() : 0;
+    return user.status === 'online' && now.value - last < PRESENCE_TTL_MS;
+  }
+
+  function presenceLabel(userOrId) {
+    const user = findMember(userOrId);
+    if (!user) return '';
+    return isUserOnline(user) ? 'en línea' : formatLastSeen(user.lastSeen, now.value);
+  }
+
+  const onlineMembers = computed(() =>
+    teamMembers.value.filter(u => u.id !== currentUser.value?.id && isUserOnline(u))
+  );
+
+  let heartbeatTimer = null;
+  let presenceStarted = false;
+
+  function beat(online) {
+    if (!pb.authStore.isValid) return;
+    pb.collection('users')
+      .update(pb.authStore.model.id, { status: online ? 'online' : 'offline', last_seen: new Date().toISOString() }, { keepalive: true })
+      .catch(() => {});
+  }
+
+  function onPresenceVisibility() {
+    const visible = document.visibilityState === 'visible';
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = visible ? setInterval(() => beat(true), HEARTBEAT_MS) : null;
+    beat(visible);
+  }
+
+  function onPageHide() {
+    beat(false);
+  }
+
+  function upsertMember(record) {
+    const mapped = mapUser(record);
+    const index = teamMembers.value.findIndex(u => u.id === mapped.id);
+    if (index > -1) teamMembers.value[index] = mapped;
+    else teamMembers.value.push(mapped);
+  }
+
+  async function startPresence() {
+    if (presenceStarted || !pb.authStore.isValid) return;
+    presenceStarted = true;
+    document.addEventListener('visibilitychange', onPresenceVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    onPresenceVisibility();
+    try {
+      // Cambios de estado, foto o nombre de los compañeros, al momento
+      await pb.collection('users').subscribe('*', (e) => {
+        if (e.action === 'delete') {
+          teamMembers.value = teamMembers.value.filter(u => u.id !== e.record.id);
+        } else {
+          upsertMember(e.record);
+        }
+      });
+    } catch (e) {
+      console.warn('No se pudo suscribir a la presencia del equipo:', e.message);
+    }
+  }
+
+  function stopPresence() {
+    if (!presenceStarted) return;
+    presenceStarted = false;
+    document.removeEventListener('visibilitychange', onPresenceVisibility);
+    window.removeEventListener('pagehide', onPageHide);
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+    pb.collection('users').unsubscribe('*').catch(() => {});
+  }
+
   async function login(email, password) {
     const cleanEmail = email.toLowerCase().trim();
     try {
@@ -47,7 +141,6 @@ export const useAuthStore = defineStore('auth', () => {
       }
       return { success: false, error: 'No se pudo conectar con el servidor' };
     }
-    setStatus('online');
     return { success: true };
   }
 
@@ -136,6 +229,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLogoutModalOpen.value = false;
     // Que este dispositivo deje de recibir notificaciones de esta cuenta
     await usePwaStore().detachPush();
+    stopPresence();
     await setStatus('offline');
     logout();
   }
@@ -145,6 +239,8 @@ export const useAuthStore = defineStore('auth', () => {
     isLogoutModalOpen.value = false;
     pb.realtime.unsubscribe().catch(() => {});
     clearFileToken();
+    // Los borradores son de esta persona: no dejarlos en un navegador compartido
+    try { localStorage.removeItem('emadrid_drafts'); } catch (_) {}
     pb.authStore.clear();
   }
 
@@ -194,7 +290,6 @@ export const useAuthStore = defineStore('auth', () => {
         }
       }
       await migrateLegacyAvatar();
-      setStatus('online');
     }
     await fetchTeamMembers();
   }
@@ -209,6 +304,13 @@ export const useAuthStore = defineStore('auth', () => {
     isLogoutModalOpen,
     login,
     initAuth,
+    // Presencia
+    now,
+    isUserOnline,
+    presenceLabel,
+    onlineMembers,
+    startPresence,
+    stopPresence,
     fetchTeamMembers,
     updateProfile,
     changePassword,
