@@ -113,7 +113,8 @@
             >
               <button @click="runMenu(() => chatStore.setReply(message))" class="menu-item"><Reply class="w-4 h-4" /> Responder</button>
               <button v-if="chatStore.canEdit(message)" @click="runMenu(() => chatStore.startEdit(message))" class="menu-item"><Pencil class="w-4 h-4" /> Editar</button>
-              <button v-if="message.content" @click="runMenu(copyText)" class="menu-item"><Copy class="w-4 h-4" /> Copiar</button>
+              <button v-if="message.content" @click="runMenu(copyText)" class="menu-item"><Copy class="w-4 h-4" /> Copiar texto</button>
+              <button v-if="firstImage" @click="runMenu(() => chatStore.copyImage(firstImage))" class="menu-item"><ImageIcon class="w-4 h-4" /> Copiar imagen</button>
               <button @click="runMenu(() => chatStore.startForward([message.id]))" class="menu-item"><Forward class="w-4 h-4" /> Reenviar</button>
               <button v-if="isCurrentUser" @click="runMenu(() => chatStore.openMessageInfo(message))" class="menu-item"><Info class="w-4 h-4" /> Info del mensaje</button>
               <button @click="runMenu(() => chatStore.toggleSelect(message.id))" class="menu-item"><CheckSquare class="w-4 h-4" /> Seleccionar</button>
@@ -123,7 +124,7 @@
         </div>
 
         <div
-          class="relative px-2.5 pt-1.5 pb-1 rounded-2xl shadow-sm text-[15px] sm:text-sm leading-relaxed"
+          class="relative max-w-full min-w-0 px-2.5 pt-1.5 pb-1 rounded-2xl shadow-sm text-[15px] sm:text-sm leading-relaxed msg-body"
           :class="[
             isCurrentUser
               ? 'bg-[#fdf3d6] dark:bg-[#3a2f12] text-slate-900 dark:text-amber-50 border border-amber-200/70 dark:border-amber-900/60'
@@ -235,7 +236,8 @@ import {
   Smile,
   Plus,
   ChevronDown,
-  Info
+  Info,
+  Image as ImageIcon
 } from 'lucide-vue-next';
 import { formatTimeOnly, formatDayTime } from '@/utils/formatters';
 import { openEmojiPicker } from '@/utils/emojiPicker';
@@ -286,6 +288,11 @@ const readByTitle = computed(() => {
     });
   return lines.length ? `Leído por:\n${lines.join('\n')}` : 'Leído';
 });
+
+// Primera foto del mensaje (para "Copiar imagen")
+const firstImage = computed(() =>
+  (props.message.attachments || []).find(a => a.file_type === 'image' && a.url && !a.failed && !a.pending) || null
+);
 
 // ---------- Menús de acciones (PC) ----------
 const menuOpen = ref(false);
@@ -527,6 +534,8 @@ function onContextMenu(e) {
     return;
   }
   if (window.getSelection()?.toString()) return;
+  // Sobre una foto o un enlace, dejar el menú del navegador ("Copiar imagen", "Abrir enlace"...)
+  if (e.target.closest?.('img, a')) return;
   if (props.message.status) return;
   e.preventDefault();
   chatStore.toggleSelect(props.message.id);

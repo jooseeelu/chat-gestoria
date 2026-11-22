@@ -5,6 +5,7 @@ import { useAuthStore } from './auth';
 import { usePwaStore } from './pwa';
 import { detectFileType } from '@/utils/fileIcons';
 import { playChimeSound } from '@/utils/formatters';
+import { copyImageToClipboard } from '@/utils/clipboard';
 
 const PAGE_SIZE = 200;
 const MESSAGE_EXPAND = 'sender,reply_to,reply_to.sender';
@@ -645,6 +646,14 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function copySelected() {
+    // Un solo mensaje con foto y sin texto: copiar la IMAGEN, no su nombre
+    const only = selectedMessages.value.length === 1 ? selectedMessages.value[0] : null;
+    const image = only?.attachments?.find(a => a.file_type === 'image' && a.url && !a.failed);
+    if (only && image && !only.content) {
+      clearSelection();
+      return copyImage(image);
+    }
+
     const text = selectedMessages.value
       .map(m => (selectedMessages.value.length > 1 ? `[${m.sender.name}] ` : '') + (m.content || m.attachments.map(a => a.filename).join(', ')))
       .join('\n');
@@ -653,6 +662,16 @@ export const useChatStore = defineStore('chat', () => {
       usePwaStore().showToast('Copiado', 'success', 1800);
     } catch (_) {}
     clearSelection();
+  }
+
+  async function copyImage(att) {
+    try {
+      await copyImageToClipboard(att.url);
+      usePwaStore().showToast('Imagen copiada: ya puedes pegarla donde quieras', 'success', 2500);
+    } catch (e) {
+      console.warn('No se pudo copiar la imagen:', e);
+      usePwaStore().showToast('No se pudo copiar la imagen. Prueba con clic derecho sobre ella → "Copiar imagen", o ábrela y descárgala.', 'error', 5000);
+    }
   }
 
   // ---------- Reenviar ----------
@@ -964,6 +983,7 @@ export const useChatStore = defineStore('chat', () => {
     toggleSelect,
     clearSelection,
     copySelected,
+    copyImage,
     forwardingIds,
     startForward,
     cancelForward,

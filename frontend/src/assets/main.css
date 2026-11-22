@@ -50,6 +50,17 @@
     touch-action: pan-y;
   }
 
+  /* Rutas, URLs o código largo sin espacios (p. ej. /etc/nginx/sites-available/...)
+     se parten donde haga falta: si no, ensanchaban la burbuja más allá de la pantalla.
+     "anywhere" (a diferencia de break-word) también reduce el ancho mínimo de la burbuja. */
+  .msg-body,
+  .msg-body .msg-text,
+  .msg-body a,
+  .msg-body code {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
   /* En PC el texto de los mensajes se puede seleccionar con el ratón */
   .msg-text {
     -webkit-user-select: text;

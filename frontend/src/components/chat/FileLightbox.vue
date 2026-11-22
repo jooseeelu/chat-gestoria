@@ -30,6 +30,17 @@
               <span>{{ showSource ? 'Ver página' : 'Ver código' }}</span>
             </button>
 
+            <!-- Copiar la foto al portapapeles (para pegarla en otra app sin descargarla) -->
+            <button
+              v-if="previewKind === 'image' && canCopy"
+              @click="copyImage"
+              class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors border border-slate-700 cursor-pointer"
+              title="Copiar imagen"
+            >
+              <Copy class="w-3.5 h-3.5" />
+              <span class="hidden sm:inline">Copiar</span>
+            </button>
+
             <a
               :href="file.url || '#'"
               :download="file.filename"
@@ -113,13 +124,21 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { X, Download, FileText, Code2, Globe, Loader2 } from 'lucide-vue-next';
+import { X, Download, FileText, Code2, Globe, Loader2, Copy } from 'lucide-vue-next';
+import { useChatStore } from '@/stores/chat';
+import { canCopyImages } from '@/utils/clipboard';
 import { useDocumentStore } from '@/stores/documents';
 import { getFileTypeBadge, getPreviewKind } from '@/utils/fileIcons';
 
 const MAX_TEXT_PREVIEW = 3 * 1024 * 1024;
 
 const docStore = useDocumentStore();
+const chatStore = useChatStore();
+const canCopy = canCopyImages();
+
+function copyImage() {
+  chatStore.copyImage(file.value);
+}
 const file = computed(() => docStore.activePreviewFile || {});
 const previewKind = computed(() => getPreviewKind(file.value));
 const badgeInfo = computed(() => getFileTypeBadge(file.value.file_type));
