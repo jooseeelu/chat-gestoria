@@ -109,33 +109,15 @@
         @input="onInput"
       ></textarea>
 
-      <!-- Selector rápido de emojis -->
-      <div class="relative flex-shrink-0">
-        <button 
-          type="button"
-          @click="showEmojiBar = !showEmojiBar"
-          class="p-2.5 sm:p-2 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
-          title="Insertar emoji"
-        >
-          <Smile class="w-5 h-5 sm:w-4 sm:h-4" />
-        </button>
-
-        <!-- Popover de emojis comunes -->
-        <div 
-          v-if="showEmojiBar"
-          class="absolute bottom-12 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2 shadow-xl flex items-center gap-1.5 z-30 animate-fade-in-up"
-        >
-          <button 
-            v-for="e in ['👍', '🚀', '🔥', '👀', '✅', '⚠️', '💡', '🎉']"
-            :key="e"
-            type="button"
-            @click="insertEmoji(e)"
-            class="p-1 text-base sm:text-sm hover:scale-125 transition-transform cursor-pointer"
-          >
-            {{ e }}
-          </button>
-        </div>
-      </div>
+      <!-- Selector con todos los emojis -->
+      <button 
+        type="button"
+        @click="pickEmoji"
+        class="p-2.5 sm:p-2 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer flex-shrink-0"
+        title="Emojis"
+      >
+        <Smile class="w-5 h-5 sm:w-4 sm:h-4" />
+      </button>
 
       <!-- Botón de Envío -->
       <button 
@@ -174,6 +156,7 @@ import {
 } from 'lucide-vue-next';
 import { useChatStore } from '@/stores/chat';
 import { formatFileSize } from '@/utils/formatters';
+import { openEmojiPicker } from '@/utils/emojiPicker';
 
 const chatStore = useChatStore();
 
@@ -234,10 +217,23 @@ function handlePaste(e) {
   }
 }
 
+// Insertar el emoji donde está el cursor (no siempre al final)
 function insertEmoji(emoji) {
-  text.value += emoji + ' ';
-  showEmojiBar.value = false;
-  textareaRef.value?.focus();
+  const el = textareaRef.value;
+  const start = el?.selectionStart ?? text.value.length;
+  const end = el?.selectionEnd ?? text.value.length;
+  text.value = text.value.slice(0, start) + emoji + text.value.slice(end);
+  if (!chatStore.editingMessage) saveDraft(chatStore.activeChannelId, text.value);
+  nextTick(() => {
+    el?.focus();
+    const pos = start + emoji.length;
+    el?.setSelectionRange(pos, pos);
+    adjustHeight();
+  });
+}
+
+function pickEmoji() {
+  openEmojiPicker(insertEmoji);
 }
 
 function adjustHeight() {

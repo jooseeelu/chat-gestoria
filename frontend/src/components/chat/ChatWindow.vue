@@ -39,7 +39,7 @@
     <!-- Mensajes del Chat con Scroll Suave -->
     <div 
       ref="messagesContainer"
-      class="flex-1 overflow-y-auto px-2 sm:px-6 py-4 bg-[#f4f1ea] dark:bg-[#070e1b]"
+      class="messages-scroll flex-1 overflow-y-auto overflow-x-hidden px-2 sm:px-6 py-4 bg-[#f4f1ea] dark:bg-[#070e1b]"
       @scroll="handleScroll"
     >
       <!-- Feed de mensajes con separadores de fecha y agrupación consecutiva -->
@@ -220,7 +220,12 @@ watch(
   (messageId) => {
     if (!messageId) return;
     nextTick(() => {
-      document.getElementById('unread-divider')?.scrollIntoView({ block: 'start' });
+      // Mover solo la lista (scrollIntoView en iPhone desplaza también la página entera)
+      const box = messagesContainer.value;
+      const divider = document.getElementById('unread-divider');
+      if (box && divider) {
+        box.scrollTop += divider.getBoundingClientRect().top - box.getBoundingClientRect().top - 8;
+      }
       handleScroll();
     });
   }

@@ -99,6 +99,21 @@ export function formatLastSeen(dateStr, now = Date.now()) {
   return `últ. vez el ${day} a las ${time}`;
 }
 
+/**
+ * Día y hora relativos: "hoy a las 14:32", "ayer a las 09:10", "el 12 nov. a las 18:05"
+ */
+export function formatDayTime(dateStr, now = Date.now()) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const time = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  const today = new Date(now);
+  if (date.toDateString() === today.toDateString()) return `hoy a las ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `ayer a las ${time}`;
+  return `el ${date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} a las ${time}`;
+}
+
 export function isSameDay(dateStr1, dateStr2) {
   if (!dateStr1 || !dateStr2) return false;
   return new Date(dateStr1).toDateString() === new Date(dateStr2).toDateString();

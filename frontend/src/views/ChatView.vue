@@ -61,6 +61,12 @@
       <!-- Elegir canal para reenviar -->
       <ForwardModal />
 
+      <!-- Info del mensaje (quién y a qué hora lo leyó) -->
+      <MessageInfoModal />
+
+      <!-- Selector con todos los emojis -->
+      <EmojiPickerSheet />
+
       <!-- Visor de Archivos (Lightbox Modal) -->
       <FileLightbox />
 
@@ -123,6 +129,8 @@ import ChangePasswordModal from '@/components/ui/ChangePasswordModal.vue';
 import LogoutConfirmModal from '@/components/ui/LogoutConfirmModal.vue';
 import SelectionBar from '@/components/chat/SelectionBar.vue';
 import ForwardModal from '@/components/chat/ForwardModal.vue';
+import MessageInfoModal from '@/components/chat/MessageInfoModal.vue';
+import EmojiPickerSheet from '@/components/chat/EmojiPickerSheet.vue';
 import TrashDrawer from '@/components/layout/TrashDrawer.vue';
 import { useChatStore } from '@/stores/chat';
 import { useAuthStore } from '@/stores/auth';

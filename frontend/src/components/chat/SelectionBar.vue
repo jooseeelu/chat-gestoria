@@ -18,8 +18,14 @@
       >
         {{ emoji }}
       </button>
+      <button @click="reactWithPicker" class="ml-0.5 w-7 h-7 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center text-slate-500 cursor-pointer" aria-label="Más emojis">
+        <Plus class="w-4 h-4" />
+      </button>
     </div>
 
+    <button v-if="single && isMine" @click="chatStore.openMessageInfo(single)" class="bar-btn" title="Info del mensaje (quién y cuándo lo leyó)">
+      <Info class="w-5 h-5" />
+    </button>
     <button v-if="single" @click="reply" class="bar-btn" title="Responder">
       <Reply class="w-5 h-5" />
     </button>
@@ -68,20 +74,31 @@
 
 <script setup>
 import { ref, computed } from 'vue';
-import { X, Reply, Pencil, Copy, Forward, Trash2, TextSelect } from 'lucide-vue-next';
+import { X, Reply, Pencil, Copy, Forward, Trash2, TextSelect, Plus, Info } from 'lucide-vue-next';
+import { useAuthStore } from '@/stores/auth';
+import { openEmojiPicker } from '@/utils/emojiPicker';
 import { useChatStore } from '@/stores/chat';
 import { usePwaStore } from '@/stores/pwa';
 
 const chatStore = useChatStore();
 const pwaStore = usePwaStore();
 
-const quickEmojis = ['👍', '❤️', '😂', '🙏', '🔥'];
+const quickEmojis = ['👍', '❤️', '😂', '😮', '🙏'];
+const authStore = useAuthStore();
 const textSheetOpen = ref(false);
 
 const count = computed(() => chatStore.selectedIds.length);
 const single = computed(() => (chatStore.selectedMessages.length === 1 ? chatStore.selectedMessages[0] : null));
 const hasText = computed(() => chatStore.selectedMessages.some(m => m.content || m.attachments?.length));
 const canDeleteAll = computed(() => chatStore.selectedMessages.length > 0 && chatStore.selectedMessages.every(m => chatStore.canModify(m)));
+
+const isMine = computed(() => single.value?.sender?.id === authStore.currentUser?.id);
+
+function reactWithPicker() {
+  const id = single.value.id;
+  chatStore.clearSelection();
+  openEmojiPicker((emoji) => chatStore.toggleReaction(id, emoji));
+}
 
 function react(emoji) {
   chatStore.toggleReaction(single.value.id, emoji);

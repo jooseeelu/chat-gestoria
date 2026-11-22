@@ -155,6 +155,7 @@ export const useChatStore = defineStore('chat', () => {
       edited_at: record.edited_at || '',
       forwarded: !!record.forwarded,
       read_by: record.read_by || [],
+      read_receipts: record.read_receipts || {},
       deleted_at: record.deleted_at || ''
     };
   }
@@ -720,6 +721,19 @@ export const useChatStore = defineStore('chat', () => {
     if (targetChannelId === activeChannelId.value) fetchMessages(targetChannelId);
   }
 
+  // ---------- Info del mensaje (quién y a qué hora lo ha leído) ----------
+
+  const infoMessage = ref(null);
+
+  function openMessageInfo(msg) {
+    clearSelection();
+    infoMessage.value = msg;
+  }
+
+  function closeMessageInfo() {
+    infoMessage.value = null;
+  }
+
   // ---------- Leído (doble check azul) ----------
 
   let markingRead = false;
@@ -797,6 +811,7 @@ export const useChatStore = defineStore('chat', () => {
         existing.reactions = record.reactions || {};
         existing.edited_at = record.edited_at || '';
         existing.read_by = record.read_by || [];
+        existing.read_receipts = record.read_receipts || {};
       } else if (chId === activeChannelId.value) {
         // Restaurado desde la papelera
         fetchMessages(chId);
@@ -955,6 +970,9 @@ export const useChatStore = defineStore('chat', () => {
     forwardMessages,
     markChannelRead,
     unreadDivider,
-    clearUnreadDivider
+    clearUnreadDivider,
+    infoMessage,
+    openMessageInfo,
+    closeMessageInfo
   };
 });

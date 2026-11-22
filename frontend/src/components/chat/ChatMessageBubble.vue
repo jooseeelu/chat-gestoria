@@ -57,41 +57,69 @@
         class="relative min-w-0 max-w-[85%] sm:max-w-[70%] lg:max-w-[60%] flex flex-col"
         :class="isCurrentUser ? 'items-end' : 'items-start'"
       >
-        <!-- Acciones rápidas (solo PC, al pasar el ratón) -->
+        <!-- Acciones (solo PC): dos botones AL LADO de la burbuja, nunca encima, como WhatsApp Web -->
         <div
           v-if="!chatStore.selectionMode && !message.status"
-          class="hidden sm:flex absolute -top-4 z-20 items-center gap-0.5 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
-          :class="isCurrentUser ? 'right-2' : 'left-2'"
+          class="hidden sm:flex absolute top-1/2 -translate-y-1/2 z-20 items-center gap-1 transition-opacity"
+          :class="[
+            isCurrentUser ? 'right-full mr-1.5 flex-row-reverse' : 'left-full ml-1.5',
+            menuOpen || reactOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          ]"
         >
-          <button
-            v-for="emoji in quickEmojis"
-            :key="emoji"
-            @click.stop="chatStore.toggleReaction(message.id, emoji)"
-            class="px-1.5 py-0.5 text-xs hover:scale-125 transition-transform rounded cursor-pointer"
-            :title="'Reaccionar con ' + emoji"
-          >
-            {{ emoji }}
-          </button>
-          <span class="w-[1px] h-3.5 bg-slate-200 dark:bg-slate-700 mx-1"></span>
-          <button @click.stop="chatStore.setReply(message)" class="action-btn" title="Responder">
-            <Reply class="w-3.5 h-3.5" />
-          </button>
-          <button v-if="chatStore.canEdit(message)" @click.stop="chatStore.startEdit(message)" class="action-btn" title="Editar">
-            <Pencil class="w-3.5 h-3.5" />
-          </button>
-          <button v-if="message.content" @click.stop="copyText" class="action-btn" title="Copiar texto">
-            <Check v-if="copied" class="w-3.5 h-3.5 text-emerald-500" />
-            <Copy v-else class="w-3.5 h-3.5" />
-          </button>
-          <button @click.stop="chatStore.startForward([message.id])" class="action-btn" title="Reenviar">
-            <Forward class="w-3.5 h-3.5" />
-          </button>
-          <button @click.stop="chatStore.toggleSelect(message.id)" class="action-btn" title="Seleccionar">
-            <CheckSquare class="w-3.5 h-3.5" />
-          </button>
-          <button v-if="chatStore.canModify(message)" @click.stop="chatStore.deleteMessage(message.id)" class="action-btn hover:!text-rose-500" title="Mover a la papelera">
-            <Trash2 class="w-3.5 h-3.5" />
-          </button>
+          <!-- Reaccionar -->
+          <div class="relative">
+            <button
+              @click.stop="toggleReactMenu"
+              class="side-btn"
+              title="Reaccionar"
+            >
+              <Smile class="w-4 h-4" />
+            </button>
+            <div
+              v-if="reactOpen"
+              class="absolute bottom-full mb-1.5 flex items-center gap-0.5 bg-white dark:bg-slate-800 px-2 py-1 rounded-full border border-slate-200 dark:border-slate-700 shadow-lg"
+              :class="isCurrentUser ? 'right-0' : 'left-0'"
+              @click.stop
+            >
+              <button
+                v-for="emoji in quickEmojis"
+                :key="emoji"
+                @click="react(emoji)"
+                class="px-1 text-xl hover:scale-125 transition-transform cursor-pointer"
+                :title="'Reaccionar con ' + emoji"
+              >
+                {{ emoji }}
+              </button>
+              <button @click="reactWithPicker" class="ml-0.5 w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer" title="Más emojis">
+                <Plus class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Menú -->
+          <div class="relative">
+            <button
+              @click.stop="toggleMenu"
+              class="side-btn"
+              title="Más opciones"
+            >
+              <ChevronDown class="w-4 h-4" />
+            </button>
+            <div
+              v-if="menuOpen"
+              class="absolute top-full mt-1 w-48 py-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl text-sm"
+              :class="isCurrentUser ? 'right-0' : 'left-0'"
+              @click.stop
+            >
+              <button @click="runMenu(() => chatStore.setReply(message))" class="menu-item"><Reply class="w-4 h-4" /> Responder</button>
+              <button v-if="chatStore.canEdit(message)" @click="runMenu(() => chatStore.startEdit(message))" class="menu-item"><Pencil class="w-4 h-4" /> Editar</button>
+              <button v-if="message.content" @click="runMenu(copyText)" class="menu-item"><Copy class="w-4 h-4" /> Copiar</button>
+              <button @click="runMenu(() => chatStore.startForward([message.id]))" class="menu-item"><Forward class="w-4 h-4" /> Reenviar</button>
+              <button v-if="isCurrentUser" @click="runMenu(() => chatStore.openMessageInfo(message))" class="menu-item"><Info class="w-4 h-4" /> Info del mensaje</button>
+              <button @click="runMenu(() => chatStore.toggleSelect(message.id))" class="menu-item"><CheckSquare class="w-4 h-4" /> Seleccionar</button>
+              <button v-if="chatStore.canModify(message)" @click="runMenu(() => chatStore.deleteMessage(message.id))" class="menu-item !text-rose-600 dark:!text-rose-400"><Trash2 class="w-4 h-4" /> Eliminar</button>
+            </div>
+          </div>
         </div>
 
         <div
@@ -162,8 +190,8 @@
               <template v-if="isCurrentUser">
                 <Clock v-if="message.status === 'sending' || message.status === 'uploading'" class="w-3.5 h-3.5" />
                 <AlertCircle v-else-if="message.status === 'failed'" class="w-3.5 h-3.5" />
-                <span v-else-if="isReadByOthers" :title="readByTitle" class="inline-flex"><CheckCheck class="w-4 h-4 text-sky-500" /></span>
-                <span v-else title="Enviado" class="inline-flex"><Check class="w-3.5 h-3.5" /></span>
+                <button v-else-if="isReadByOthers" type="button" @click.stop="openInfo" :title="readByTitle" class="inline-flex p-0.5 -m-0.5 rounded cursor-pointer hover:bg-black/5 dark:hover:bg-white/10"><CheckCheck class="w-4 h-4 text-sky-500" /></button>
+                <button v-else type="button" @click.stop="openInfo" title="Enviado · toca para ver la info" class="inline-flex p-0.5 -m-0.5 rounded cursor-pointer hover:bg-black/5 dark:hover:bg-white/10"><Check class="w-3.5 h-3.5" /></button>
               </template>
             </span>
           </div>
@@ -191,7 +219,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import {
   Reply,
   Trash2,
@@ -203,9 +231,14 @@ import {
   Pencil,
   Forward,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Smile,
+  Plus,
+  ChevronDown,
+  Info
 } from 'lucide-vue-next';
-import { formatTimeOnly } from '@/utils/formatters';
+import { formatTimeOnly, formatDayTime } from '@/utils/formatters';
+import { openEmojiPicker } from '@/utils/emojiPicker';
 import { useAuthStore } from '@/stores/auth';
 import { useChatStore } from '@/stores/chat';
 import { useDocumentStore } from '@/stores/documents';
@@ -228,7 +261,7 @@ const chatStore = useChatStore();
 const docStore = useDocumentStore();
 
 const copied = ref(false);
-const quickEmojis = ['👍', '🚀', '👀', '❤️', '🔥'];
+const quickEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
 const LONG_PRESS_MS = 450;
 const SWIPE_REPLY_PX = 64;
@@ -244,11 +277,70 @@ const isSelected = computed(() => chatStore.selectedIds.includes(props.message.i
 // "Leído por Johan, Vanesa" al pasar el ratón por el doble check
 const readByTitle = computed(() => {
   const me = authStore.currentUser?.id;
-  const names = (props.message.read_by || [])
+  const receipts = props.message.read_receipts || {};
+  const lines = (props.message.read_by || [])
     .filter(id => id !== me)
-    .map(id => authStore.teamMembers.find(u => u.id === id)?.name)
-    .filter(Boolean);
-  return names.length ? `Leído por ${names.join(', ')}` : 'Leído';
+    .map(id => {
+      const name = authStore.teamMembers.find(u => u.id === id)?.name || 'Alguien';
+      return receipts[id] ? `${name} · ${formatDayTime(receipts[id], authStore.now)}` : name;
+    });
+  return lines.length ? `Leído por:\n${lines.join('\n')}` : 'Leído';
+});
+
+// ---------- Menús de acciones (PC) ----------
+const menuOpen = ref(false);
+const reactOpen = ref(false);
+
+function closeMenus() {
+  menuOpen.value = false;
+  reactOpen.value = false;
+}
+
+function toggleMenu() {
+  reactOpen.value = false;
+  menuOpen.value = !menuOpen.value;
+}
+
+function toggleReactMenu() {
+  menuOpen.value = false;
+  reactOpen.value = !reactOpen.value;
+}
+
+function runMenu(action) {
+  closeMenus();
+  action();
+}
+
+function react(emoji) {
+  closeMenus();
+  chatStore.toggleReaction(props.message.id, emoji);
+}
+
+function reactWithPicker() {
+  closeMenus();
+  openEmojiPicker((emoji) => chatStore.toggleReaction(props.message.id, emoji));
+}
+
+function openInfo() {
+  if (chatStore.selectionMode) return;
+  chatStore.openMessageInfo(props.message);
+}
+
+// Cerrar los menús al hacer clic fuera o pulsar Esc
+function onDocumentClick() {
+  if (menuOpen.value || reactOpen.value) closeMenus();
+}
+function onDocumentKey(e) {
+  if (e.key === 'Escape') closeMenus();
+}
+watch([menuOpen, reactOpen], ([m, r]) => {
+  if (m || r) {
+    document.addEventListener('click', onDocumentClick);
+    document.addEventListener('keydown', onDocumentKey);
+  } else {
+    document.removeEventListener('click', onDocumentClick);
+    document.removeEventListener('keydown', onDocumentKey);
+  }
 });
 
 function reactionTitle(userIds) {
@@ -335,7 +427,12 @@ function goToReply() {
   }
   const el = document.getElementById('msg-' + props.message.reply_to?.id);
   if (!el) return;
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // Mover solo la lista de mensajes (scrollIntoView en iPhone mueve también la página)
+  const box = el.closest('.messages-scroll');
+  if (box) {
+    const offset = el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientHeight / 2 + el.clientHeight / 2;
+    box.scrollBy({ top: offset, behavior: 'smooth' });
+  }
   el.classList.add('msg-flash');
   setTimeout(() => el.classList.remove('msg-flash'), 1400);
 }
@@ -435,10 +532,22 @@ function onContextMenu(e) {
   chatStore.toggleSelect(props.message.id);
 }
 
-onBeforeUnmount(clearPressTimer);
+onBeforeUnmount(() => {
+  clearPressTimer();
+  document.removeEventListener('click', onDocumentClick);
+  document.removeEventListener('keydown', onDocumentKey);
+});
 </script>
 
 <style scoped>
+.side-btn {
+  @apply w-8 h-8 rounded-full flex items-center justify-center bg-white/90 dark:bg-slate-800/90 text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm hover:text-slate-900 dark:hover:text-white cursor-pointer;
+}
+
+.menu-item {
+  @apply w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/70 cursor-pointer;
+}
+
 .action-btn {
   @apply p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer;
 }

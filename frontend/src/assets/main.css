@@ -9,10 +9,24 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     /* iOS: sin rebote elástico del documento ni resaltado gris al tocar */
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
+    /* Sin zoom por doble toque (el pellizco sigue disponible por accesibilidad) */
+    touch-action: manipulation;
+  }
+
+  /* La lista de mensajes: solo scroll vertical, y sin arrastrar la página al llegar a los extremos */
+  .messages-scroll {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .safe-area-root {
